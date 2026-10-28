@@ -197,6 +197,7 @@
     const NULL_RESULT = {
       brand: null,
       description: null,
+      package_barcode: null,
       ingredients: {
         raw_text: null,
         parsed_list: [],
@@ -216,7 +217,8 @@
     // An object that parsed but holds no panel data is an empty read, and must
     // be flagged Error rather than written as a Clean row.
     //
-    // language_code, brand and description are deliberately NOT counted here.
+    // language_code, brand, description and package_barcode are deliberately
+    // NOT counted here.
     // They identify the product or the text rather than being panel data, so
     // a front-only read carrying nothing but a brand and name stays an Error.
     function hasAnyPanel(product) {
@@ -446,6 +448,7 @@ Fill a section ONLY when you have seen the panel it comes from:
 - Saw an allergen statement, or allergens emphasised inside the list -> fill allergens_contains / allergens_may_contain
 - Saw a printed FoP score or seal -> fill nutrition_and_health_scores
 - Saw a legible brand name or product name -> fill brand / description
+- Saw a barcode with every one of its printed digits legible -> fill package_barcode
 - Saw none of these -> those fields stay null / empty
 Never decide from what you think the product IS. If a panel is printed, you read it; if it is not, the field stays empty.
 
@@ -631,6 +634,14 @@ EXTRACTION RULES
    - Pick ONE language: on a multilingual pack return the product name in the language you chose for the rest of the object, not every translation joined together
    - null if no product name is legible
 
+7. PACKAGE BARCODE:
+   "package_barcode" - the number printed under the EAN / UPC barcode on the pack:
+   - All 8, 12 or 13 digits, copied exactly as printed, left to right. Do not add, pad or drop a digit
+   - If ANY digit will not resolve, return null - never write a "?", never guess a digit. The code checks the last digit, so a misread is caught and costs you the field
+   - Only the barcode of THIS product. On a shelf photo, a barcode on a neighbouring pack or on a shelf label is not it
+   - A QR code or Datamatrix square is NOT a barcode. Never from memory - knowing the product's barcode is not reading it
+   - null if no barcode digits are legible, which on a front-facing pack is the normal answer
+
 =============================================================
 NULL vs EMPTY ARRAY - THESE MEAN DIFFERENT THINGS
 =============================================================
@@ -658,6 +669,7 @@ STEP-BY-STEP PROCESS
 5. Standardize nutrient names to English; leave every other string in its printed language
 6. Name the language of the text you read in language_code, deriving it from nothing but that text
 7. Copy the brand and the product name exactly as printed on the package, or null
+8. Copy the barcode digits exactly as printed, or null if any digit is unreadable
 
 =============================================================
 VALIDATION - RUN THIS BEFORE ANSWERING
@@ -677,6 +689,7 @@ VALIDATION - RUN THIS BEFORE ANSWERING
 - No allergen from a "may contain" sentence appears in allergens_contains
 - brand was READ from legible letters on the pack, never recognised from a logo's look, and is not the manufacturer or distributor from the address block, a store logo, a certification seal or a region
 - description is printed package text, not a shelf-label abbreviation, and carries no net weight, price or claim
+- package_barcode is every digit printed under this pack's barcode, read from the image, with nothing guessed, padded or dropped - or null
 - No field was filled from the product's fame rather than from its label
 
 =============================================================
@@ -685,6 +698,7 @@ REQUIRED JSON OUTPUT SCHEMA - return exactly this object, nothing else
 {
   "brand": "string or null",
   "description": "string or null",
+  "package_barcode": "string or null",
   "ingredients": {
     "raw_text": "string or null",
     "parsed_list": ["string"],
@@ -705,19 +719,19 @@ REQUIRED JSON OUTPUT SCHEMA - return exactly this object, nothing else
 }
 
 EXAMPLE - the BACK of a US sunscreen can: a Drug Facts panel, NO nutrition panel, and no legible brand or product name on this side:
-{"brand":null,"description":null,"ingredients":{"raw_text":"Alcohol Denat., Isobutane, VA/Butyl Maleate/Isobornyl Acrylate Copolymer, Caprylyl Glycol, Polyglyceryl-3 Stearate","parsed_list":["Alcohol Denat.","Isobutane","VA/Butyl Maleate/Isobornyl Acrylate Copolymer","Caprylyl Glycol","Polyglyceryl-3 Stearate"],"is_partial":false,"active_ingredients":[{"name":"Avobenzone","strength":"3.0${PCT}","purpose":"Sunscreen"},{"name":"Homosalate","strength":"10.0${PCT}","purpose":"Sunscreen"},{"name":"Octisalate","strength":"5.0${PCT}","purpose":"Sunscreen"},{"name":"Octocrylene","strength":"10.0${PCT}","purpose":"Sunscreen"},{"name":"Oxybenzone","strength":"6.0${PCT}","purpose":"Sunscreen"}],"allergens_contains":[],"allergens_may_contain":[]},"nutrition_facts":null,"product_claims":["Broad Spectrum SPF 100","Clinically Proven","UVA/UVB Protection","Water Resistant (80 Minutes)"],"nutrition_and_health_scores":[],"language_code":"en"}
+{"brand":null,"description":null,"package_barcode":null,"ingredients":{"raw_text":"Alcohol Denat., Isobutane, VA/Butyl Maleate/Isobornyl Acrylate Copolymer, Caprylyl Glycol, Polyglyceryl-3 Stearate","parsed_list":["Alcohol Denat.","Isobutane","VA/Butyl Maleate/Isobornyl Acrylate Copolymer","Caprylyl Glycol","Polyglyceryl-3 Stearate"],"is_partial":false,"active_ingredients":[{"name":"Avobenzone","strength":"3.0${PCT}","purpose":"Sunscreen"},{"name":"Homosalate","strength":"10.0${PCT}","purpose":"Sunscreen"},{"name":"Octisalate","strength":"5.0${PCT}","purpose":"Sunscreen"},{"name":"Octocrylene","strength":"10.0${PCT}","purpose":"Sunscreen"},{"name":"Oxybenzone","strength":"6.0${PCT}","purpose":"Sunscreen"}],"allergens_contains":[],"allergens_may_contain":[]},"nutrition_facts":null,"product_claims":["Broad Spectrum SPF 100","Clinically Proven","UVA/UVB Protection","Water Resistant (80 Minutes)"],"nutrition_and_health_scores":[],"language_code":"en"}
 
 EXAMPLE - a Mexican biscuit pack, back panel visible. The small logo reads "La Abuela"; the only product name on this side is the legal name after "Denominación:". "Elaborado por Galletera del Norte S.A. de C.V." is the manufacturer, NOT the brand:
-{"brand":"La Abuela","description":"GALLETAS DULCES","ingredients":{"raw_text":"HARINA DE TRIGO, AZÚCAR, GRASA VEGETAL, JARABE DE MAÍZ DE ALTA FRUCTOSA, SAL, LECHE EN POLVO, LECITINA DE SOYA.","parsed_list":["HARINA DE TRIGO","AZÚCAR","GRASA VEGETAL","JARABE DE MAÍZ DE ALTA FRUCTOSA","SAL","LECHE EN POLVO","LECITINA DE SOYA"],"is_partial":false,"active_ingredients":[],"allergens_contains":["TRIGO","LECHE","SOYA"],"allergens_may_contain":["HUEVO"]},"nutrition_facts":{"servings_per_container":"About 4","serving_size":"6 galletas (30 g)","basis":"per serving","nutrients":[{"name":"Calories","amount":"140","unit":"kcal","daily_value_percent":7},{"name":"Total Fat","amount":"4.5","unit":"g","daily_value_percent":6},{"name":"Sodium","amount":"115","unit":"mg","daily_value_percent":5},{"name":"Protein","amount":"2","unit":"g","daily_value_percent":null}]},"product_claims":[],"nutrition_and_health_scores":[{"system_name":"NOM-051 warning seals","score_value":"2 seals","scale_max":null,"details":"EXCESO AZÚCARES; EXCESO CALORÍAS"}],"language_code":"es"}
+{"brand":"La Abuela","description":"GALLETAS DULCES","package_barcode":null,"ingredients":{"raw_text":"HARINA DE TRIGO, AZÚCAR, GRASA VEGETAL, JARABE DE MAÍZ DE ALTA FRUCTOSA, SAL, LECHE EN POLVO, LECITINA DE SOYA.","parsed_list":["HARINA DE TRIGO","AZÚCAR","GRASA VEGETAL","JARABE DE MAÍZ DE ALTA FRUCTOSA","SAL","LECHE EN POLVO","LECITINA DE SOYA"],"is_partial":false,"active_ingredients":[],"allergens_contains":["TRIGO","LECHE","SOYA"],"allergens_may_contain":["HUEVO"]},"nutrition_facts":{"servings_per_container":"About 4","serving_size":"6 galletas (30 g)","basis":"per serving","nutrients":[{"name":"Calories","amount":"140","unit":"kcal","daily_value_percent":7},{"name":"Total Fat","amount":"4.5","unit":"g","daily_value_percent":6},{"name":"Sodium","amount":"115","unit":"mg","daily_value_percent":5},{"name":"Protein","amount":"2","unit":"g","daily_value_percent":null}]},"product_claims":[],"nutrition_and_health_scores":[{"system_name":"NOM-051 warning seals","score_value":"2 seals","scale_max":null,"details":"EXCESO AZÚCARES; EXCESO CALORÍAS"}],"language_code":"es"}
 
 EXAMPLE - a German food pack. The panel prints "2.038 kJ" and "21,3 g", so the thousands dot is dropped and the decimal commas become dots. It declares "Salz", so the row is Salt - never Sodium, even though "Natriumhydrogencarbonat" appears in the ingredient list:
-{"brand":"Sonnenhof","description":"Butterkekse","ingredients":{"raw_text":"Weizenmehl, Zucker, pflanzliches Öl (Palm), Magermilchpulver, Speisesalz, Backtriebmittel: Natriumhydrogencarbonat, Emulgator: Sojalecithine.","parsed_list":["Weizenmehl","Zucker","pflanzliches Öl (Palm)","Magermilchpulver","Speisesalz","Backtriebmittel: Natriumhydrogencarbonat","Emulgator: Sojalecithine"],"is_partial":false,"active_ingredients":[],"allergens_contains":["WEIZEN","MILCH","SOJA"],"allergens_may_contain":["HASELNÜSSE"]},"nutrition_facts":{"servings_per_container":null,"serving_size":null,"basis":"per 100g","nutrients":[{"name":"Calories","amount":"2038","unit":"kJ","daily_value_percent":null},{"name":"Calories","amount":"487","unit":"kcal","daily_value_percent":null},{"name":"Total Fat","amount":"21.3","unit":"g","daily_value_percent":null},{"name":"Saturated Fat","amount":"10.6","unit":"g","daily_value_percent":null},{"name":"Carbohydrates","amount":"66.4","unit":"g","daily_value_percent":null},{"name":"Sugars","amount":"28.9","unit":"g","daily_value_percent":null},{"name":"Protein","amount":"6.1","unit":"g","daily_value_percent":null},{"name":"Salt","amount":"1.13","unit":"g","daily_value_percent":null}]},"product_claims":["Ohne Konservierungsstoffe"],"nutrition_and_health_scores":[{"system_name":"Nutri-Score","score_value":"D","scale_max":"E","details":null}],"language_code":"de"}
+{"brand":"Sonnenhof","description":"Butterkekse","package_barcode":null,"ingredients":{"raw_text":"Weizenmehl, Zucker, pflanzliches Öl (Palm), Magermilchpulver, Speisesalz, Backtriebmittel: Natriumhydrogencarbonat, Emulgator: Sojalecithine.","parsed_list":["Weizenmehl","Zucker","pflanzliches Öl (Palm)","Magermilchpulver","Speisesalz","Backtriebmittel: Natriumhydrogencarbonat","Emulgator: Sojalecithine"],"is_partial":false,"active_ingredients":[],"allergens_contains":["WEIZEN","MILCH","SOJA"],"allergens_may_contain":["HASELNÜSSE"]},"nutrition_facts":{"servings_per_container":null,"serving_size":null,"basis":"per 100g","nutrients":[{"name":"Calories","amount":"2038","unit":"kJ","daily_value_percent":null},{"name":"Calories","amount":"487","unit":"kcal","daily_value_percent":null},{"name":"Total Fat","amount":"21.3","unit":"g","daily_value_percent":null},{"name":"Saturated Fat","amount":"10.6","unit":"g","daily_value_percent":null},{"name":"Carbohydrates","amount":"66.4","unit":"g","daily_value_percent":null},{"name":"Sugars","amount":"28.9","unit":"g","daily_value_percent":null},{"name":"Protein","amount":"6.1","unit":"g","daily_value_percent":null},{"name":"Salt","amount":"1.13","unit":"g","daily_value_percent":null}]},"product_claims":["Ohne Konservierungsstoffe"],"nutrition_and_health_scores":[{"system_name":"Nutri-Score","score_value":"D","scale_max":"E","details":null}],"language_code":"de"}
 
 EXAMPLE - the back of a German seasoning sachet held in a hand. The thumb covers the second half of the ingredient list and the fat rows of the nutrition table. Only the visible words and rows are returned, the list is flagged partial, nothing is filled in from what such a seasoning usually contains, and "Weizenmehl" puts Weizen in allergens_contains:
-{"brand":null,"description":"Grillwürzer Kräuter","ingredients":{"raw_text":"Speisesalz, Paprika, Weizenmehl, Zwiebeln","parsed_list":["Speisesalz","Paprika","Weizenmehl","Zwiebeln"],"is_partial":true,"active_ingredients":[],"allergens_contains":["Weizen"],"allergens_may_contain":[]},"nutrition_facts":{"servings_per_container":null,"serving_size":null,"basis":"per 100g","nutrients":[{"name":"Carbohydrates","amount":"41.2","unit":"g","daily_value_percent":null},{"name":"Sugars","amount":"6.3","unit":"g","daily_value_percent":null},{"name":"Protein","amount":"9.8","unit":"g","daily_value_percent":null},{"name":"Salt","amount":"38.5","unit":"g","daily_value_percent":null}]},"product_claims":[],"nutrition_and_health_scores":[],"language_code":"de"}
+{"brand":null,"description":"Grillwürzer Kräuter","package_barcode":null,"ingredients":{"raw_text":"Speisesalz, Paprika, Weizenmehl, Zwiebeln","parsed_list":["Speisesalz","Paprika","Weizenmehl","Zwiebeln"],"is_partial":true,"active_ingredients":[],"allergens_contains":["Weizen"],"allergens_may_contain":[]},"nutrition_facts":{"servings_per_container":null,"serving_size":null,"basis":"per 100g","nutrients":[{"name":"Carbohydrates","amount":"41.2","unit":"g","daily_value_percent":null},{"name":"Sugars","amount":"6.3","unit":"g","daily_value_percent":null},{"name":"Protein","amount":"9.8","unit":"g","daily_value_percent":null},{"name":"Salt","amount":"38.5","unit":"g","daily_value_percent":null}]},"product_claims":[],"nutrition_and_health_scores":[],"language_code":"de"}
 
 EXAMPLE - a bottled mineral water. No ingredient declaration, and the analysis table lists DISSOLVED IONS, so the row is Sodium - never Salt. The label prints the brand and the name; "Natürliches Mineralwasser" is a claim, not the description:
-{"brand":"Bergquell","description":"Classic Mineralwasser mit Kohlensäure","ingredients":{"raw_text":null,"parsed_list":[],"is_partial":null,"active_ingredients":[],"allergens_contains":[],"allergens_may_contain":[]},"nutrition_facts":{"servings_per_container":null,"serving_size":null,"basis":"per 100ml","nutrients":[{"name":"Calcium","amount":"8.02","unit":"mg","daily_value_percent":null},{"name":"Magnesium","amount":"2.61","unit":"mg","daily_value_percent":null},{"name":"Sodium","amount":"1.16","unit":"mg","daily_value_percent":null},{"name":"Potassium","amount":"0.42","unit":"mg","daily_value_percent":null}]},"product_claims":["Natürliches Mineralwasser"],"nutrition_and_health_scores":[],"language_code":"de"}`;
+{"brand":"Bergquell","description":"Classic Mineralwasser mit Kohlensäure","package_barcode":null,"ingredients":{"raw_text":null,"parsed_list":[],"is_partial":null,"active_ingredients":[],"allergens_contains":[],"allergens_may_contain":[]},"nutrition_facts":{"servings_per_container":null,"serving_size":null,"basis":"per 100ml","nutrients":[{"name":"Calcium","amount":"8.02","unit":"mg","daily_value_percent":null},{"name":"Magnesium","amount":"2.61","unit":"mg","daily_value_percent":null},{"name":"Sodium","amount":"1.16","unit":"mg","daily_value_percent":null},{"name":"Potassium","amount":"0.42","unit":"mg","daily_value_percent":null}]},"product_claims":["Natürliches Mineralwasser"],"nutrition_and_health_scores":[],"language_code":"de"}`;
 
 
     // Structured output: the model physically cannot emit prose, markdown fences
@@ -750,6 +764,8 @@ EXAMPLE - a bottled mineral water. No ingredient declaration, and the analysis t
           // logo. Also written out as their own Mozenda fields.
           brand: { type: "STRING", nullable: true },
           description: { type: "STRING", nullable: true },
+          // As printed - the code checks the last digit and never pads.
+          package_barcode: { type: "STRING", nullable: true },
           ingredients: {
             type: "OBJECT",
             properties: {
@@ -830,7 +846,7 @@ EXAMPLE - a bottled mineral water. No ingredient declaration, and the analysis t
           language_code: { type: "STRING", nullable: true }
         },
         propertyOrdering: [
-          "brand", "description",
+          "brand", "description", "package_barcode",
           "ingredients", "nutrition_facts", "product_claims",
           "nutrition_and_health_scores", "language_code"
         ]
@@ -1158,6 +1174,36 @@ EXAMPLE - a bottled mineral water. No ingredient declaration, and the analysis t
         .map(score => ({ system_name: 'Nutri-Score', score_value: score.score_value.toUpperCase(), scale_max: 'E', details: null }));
     }
 
+    // Remainder without the percent operator (see PCT).
+    function mod(a, b) {
+      return a - b * Math.floor(a / b);
+    }
+
+    function hasValidGtinCheckDigit(digits) {
+      const body = digits.slice(0, -1);
+      const check = Number(digits[digits.length - 1]);
+      let sum = 0;
+      for (let i = 0; i < body.length; i++) {
+        sum += Number(body[i]) * (mod(body.length - i, 2) === 1 ? 3 : 1);
+      }
+      return mod(10 - mod(sum, 10), 10) === check;
+    }
+
+    // The barcode exactly as printed - no padding - or null. Only a whole
+    // 8, 12 or 13 digit barcode whose check digit holds survives; a "?"
+    // means a digit was not read, so the whole number goes.
+    function normalizePackageBarcode(value) {
+      const text = cleanText(value);
+      if (text.indexOf('?') !== -1) return null;
+      const digits = text.replace(/D/g, '');
+      if (!digits) return null;
+      if ([8, 12, 13].indexOf(digits.length) === -1 || !hasValidGtinCheckDigit(digits)) {
+        console.warn(`Discarding package barcode "${text}" - not a whole barcode with a valid check digit`);
+        return null;
+      }
+      return digits;
+    }
+
     // Turns the raw model payload into the record Mozenda expects:
     //   raw_data_json  the whole normalized object as compact JSON text. Every
     //                  section is always present (null / [] when absent), so
@@ -1200,6 +1246,7 @@ EXAMPLE - a bottled mineral water. No ingredient declaration, and the analysis t
         raw_data_json: JSON.stringify({
           brand,
           description,
+          package_barcode: normalizePackageBarcode(source.package_barcode),
           ingredients,
           // An all-empty panel object collapses to null, same as no panel.
           nutrition_facts: isEmptyValue(nutritionFacts) ? null : nutritionFacts,

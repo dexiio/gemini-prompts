@@ -533,6 +533,7 @@ An ingredient list or nutrition table is the EXCEPTION on this kind of photo. Wh
 FIELDS:
 - "nameOnPack" / "brandOnPack" - the name and brand AS PRINTED ON THE PACKAGE, verbatim. null if not legible. These exist so SECTION C's bind can be checked - they are NOT copies of the tag
 - "netContent" - the net quantity printed on the pack, as printed ("400 g", "3 x 90 ml", "0,5 l"). Never from the tag
+- "barcode" - the number printed under the barcode ON THIS PACK, all 8, 12 or 13 digits, copied exactly as printed, left to right. If ANY digit will not resolve, null - never a "?", never a guessed or dropped digit. The barcode is usually on the back or the bottom, so null is the normal answer on a shelf photo. Never from the tag, never from memory
 - "ingredients.rawText" - the exact declaration after the heading, line wraps joined with one space and wrap-hyphens removed. Same words, order, punctuation, script and capitalisation. Do NOT translate or re-order. Do NOT include the "Contains:" sentence
 - "ingredients.parsedList" - the same declaration as an array, one entry per top-level ingredient, in printed order, each verbatim INCLUDING its percentage and parenthesised sub-ingredients. A comma INSIDE parentheses does not start a new entry. Joined back together it must reproduce rawText. [] when rawText is null
 - "ingredients.isPartial" - a real BOOLEAN. true when the list is cut off, curves out of view, blurs mid-list or is hidden. false when read heading to end. null when there is no ingredient text
@@ -734,6 +735,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
           nameOnPack: { type: 'STRING', nullable: true },
           brandOnPack: { type: 'STRING', nullable: true },
           netContent: { type: 'STRING', nullable: true },
+          barcode: { type: 'STRING', nullable: true },
 
           ingredients: {
             type: 'OBJECT',
@@ -811,7 +813,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
         },
         propertyOrdering: [
           'tagIndex', 'bindConfidence', 'bindBasis',
-          'nameOnPack', 'brandOnPack', 'netContent',
+          'nameOnPack', 'brandOnPack', 'netContent', 'barcode',
           'ingredients', 'nutritionFacts', 'productClaims',
           'healthScores', 'languageCode'
         ]
@@ -1062,32 +1064,22 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
     // their own scale codes this way, often outside the IFPS range, so the
     // printed label - not the range - is what makes it a PLU.
     //
-    // Returns { value, raw }. A code SHORTER than 4 digits is not
-    // shippable in the UPC column: Lidl produce signs print "PLU43", and a
-    // 2-digit value in a column that reads as barcode-or-PLU is
-    // indistinguishable from a bad read. The digits are dropped and the
-    // printed text is kept in RAW_DATA_JSON.plu_raw as the evidence.
+    // Returns { value, raw }. The UPC column carries the code exactly as
+    // the tag prints it, word included ("PLU43", "PLU541") - the "PLU"
+    // is what tells a short produce code apart from a bad barcode read.
     function labelledPlu(value) {
       const match = String(isBlank(value) ? '' : value).match(/PLU\D{0,3}(\d{1,5})(?!\d)/i);
       if (!match) return { value: '', raw: '' };
-      const digits = match[1];
-      if (digits.length < 4) {
-        console.warn(`Discarding "${match[0]}" as a PLU - ${digits.length} digits is too short to ship; kept as plu_raw`);
-        return { value: '', raw: match[0] };
-      }
-      return { value: digits, raw: match[0] };
+      return { value: match[0].trim(), raw: match[0] };
     }
 
-    // Returns { value, type }. A PLU goes in the UPC column as printed -
-    // never padded, so it cannot be mistaken for a GTIN. A barcode is
-    // either read whole with a matching check digit or dropped: no
-    // rebuilding, no padding of partial reads.
+    // Returns { value, type }. The UPC goes in the column as printed on
+    // the tag - a PLU keeps its "PLU", an 8- or 12-digit barcode is not
+    // padded to 13. A barcode is either read whole with a matching check
+    // digit or dropped: no rebuilding of partial reads.
     function normalizeUpc(value) {
       const plu = labelledPlu(value);
       if (plu.value) return { value: plu.value, type: 'plu', raw: plu.raw };
-      // A tag that printed "PLU43" has said its number is a produce code,
-      // so the bare digits must not then be re-read as a barcode below.
-      if (plu.raw) return { value: '', type: '', raw: plu.raw };
       // A "?" is a digit the model could not read. Stripping it would leave
       // 12 digits that can pass the check digit as a different UPC-A.
       if (String(isBlank(value) ? '' : value).indexOf('?') !== -1) {
@@ -1101,7 +1093,23 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
         console.warn(`Discarding "${digits}" as UPC - neither a valid barcode nor a PLU`);
         return { value: '', type: '' };
       }
-      return { value: digits.padStart(13, '0'), type: 'gtin' };
+      return { value: digits, type: 'gtin' };
+    }
+
+    // The barcode read off a PACKAGE in SECTION B - never the tag's UPC.
+    // Kept exactly as printed, no padding, and only when it is a whole 8,
+    // 12 or 13 digit barcode whose check digit holds. A "?" means a digit
+    // was not read, so the whole number goes.
+    function normalizePackageBarcode(value) {
+      const text = String(isBlank(value) ? '' : value);
+      if (text.indexOf('?') !== -1) return '';
+      const digits = text.replace(/\D/g, '');
+      if (!digits) return '';
+      if ([8, 12, 13].indexOf(digits.length) === -1 || !hasValidGtinCheckDigit(digits)) {
+        console.warn(`Discarding package barcode "${value}" - not a whole barcode with a valid check digit`);
+        return '';
+      }
+      return digits;
     }
 
     function normalizeCountry(value) {
@@ -1274,6 +1282,8 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       if (name) out.name_on_pack = name;
       if (brand) out.brand_on_pack = brand;
       if (net) out.net_content = net;
+      const barcode = normalizePackageBarcode(pkg.barcode);
+      if (barcode) out.package_barcode = barcode;
 
       const src = pkg.ingredients && typeof pkg.ingredients === 'object' ? pkg.ingredients : {};
       const ingredients = {};
@@ -1568,7 +1578,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
 
     // upc_type tells downstream whether the UPC column holds a PLU or a
     // GTIN.
-    function buildRawJson(label, unitPrice, unitCheck, skuPrinted, upcType, packaging, pluRaw) {
+    function buildRawJson(label, unitPrice, unitCheck, upcType, packaging, pluRaw) {
       const raw = {};
       // Where on the fixture this row came from - the reviewer's way back to
       // the tag in the photo, and what the duplicate check keys on.
@@ -1576,7 +1586,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       if (location) raw.tag_location = location;
       if (upcType) raw.upc_type = upcType;
       // The printed produce-code text, kept whenever it did not become the
-      // UPC - a "PLU43" too short to ship still has to leave a trace.
+      // UPC (a PLU printed in the article-number slot, say).
       if (pluRaw) raw.plu_raw = pluRaw;
       if (unitPrice !== null) {
         raw.unit_price = { printed: formatPrice(unitPrice), per: String(label.unitPriceBasis || '').trim() };
@@ -1589,13 +1599,6 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
 
       const confidence = buildConfidence(label.confidence);
       if (confidence) raw.confidence = confidence;
-      if (skuPrinted) {
-        raw.article_printed = skuPrinted;
-        // The second reading, kept whenever the SKU was withheld, so a drop
-        // can be explained from the export alone.
-        const check = cleanText(label.productIdCheck, CONFIG.RAW_MAX_VALUE_CHARS);
-        if (check) raw.article_check = check;
-      }
 
       const extras = Array.isArray(label.extras) ? label.extras : [];
       let written = 0;
@@ -1633,9 +1636,9 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
 
     const EMPTY_USAGE = { inputTokens: 0, outputTokens: 0, thoughtsTokens: 0, cachedTokens: 0, totalTokens: 0, cost: 0 };
 
+    // ISO 8601 in UTC to the second: 2026-10-28T14:05:09Z.
     function nowStamp() {
-      const now = new Date();
-      return `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`;
+      return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
     }
 
     function hasPrice(label) {
@@ -1721,7 +1724,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       if (!upc.value && !upc.raw && pluInId.raw) upc = { value: '', type: '', raw: pluInId.raw };
       row.UPC = upc.value;
       row.SKU = pluInId.raw ? '' : resolveSku(label);
-      if (upc.type === 'plu' && row.SKU === upc.value) row.SKU = '';
+      if (upc.type === 'plu' && row.SKU === upc.value.replace(/\D/g, '')) row.SKU = '';
 
       const unitPrice = parsePrice(label.unitPrice);
       const prices = [];
@@ -1736,11 +1739,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
         if (CONFIG.UNIT_PRICE_MISMATCH_FLAG) row.clean = CONFIG.UNIT_PRICE_MISMATCH_FLAG;
       }
 
-      // Prefer the token the model says it transcribed; fall back to the
-      // cleaned field for a response that predates productIdPrinted.
-      const printed = cleanText(label.productIdPrinted, CONFIG.RAW_MAX_VALUE_CHARS)
-        || (isBlank(label.productId) ? '' : String(label.productId).trim());
-      row.RAW_DATA_JSON = buildRawJson(label, unitPrice, unitCheck, printed !== row.SKU ? printed : '', upc.type, packaging,
+      row.RAW_DATA_JSON = buildRawJson(label, unitPrice, unitCheck, upc.type, packaging,
         upc.raw && upc.raw !== row.UPC ? upc.raw : '');
 
       return row;
