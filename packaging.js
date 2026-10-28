@@ -246,16 +246,28 @@
       return textOrNull(product.brand) !== null || textOrNull(product.description) !== null;
     }
 
+    // imageURL may hold several photos of the SAME product separated by "|"
+    // (front, back, side). All of them go to Gemini in one call.
     async function findProductInfo(imageUrl, apiKey) {
-      if (!imageUrl) {
+      const imageUrls = imageUrl.split('|').map(url => url.trim()).filter(Boolean);
+      if (imageUrls.length === 0) {
         return { data: NULL_RESULT, usage: null };
       }
 
-      // Google Drive conversion (with variants for retry)
-      const imageVariants = convertGoogleDriveUrl(imageUrl);
+      // Google Drive conversion (with variants for retry), per image
+      const imageVariantLists = imageUrls.map(convertGoogleDriveUrl);
+
+      // Every image must download: a row read from only some of its photos
+      // would look complete while missing panels. Thrown outside the try
+      // below, so it reaches the top-level M_StopWithError.
+      const fetched = await Promise.all(imageVariantLists.map(fetchImageWithRetry));
+      const failed = imageUrls.filter((url, index) => !fetched[index]);
+      if (failed.length > 0) {
+        throw new Error(`Failed to fetch ${failed.length} of ${imageUrls.length} images: ${failed.join(' | ')}`);
+      }
 
       try {
-        const result = await extractProductInfo(imageVariants, apiKey);
+        const result = await extractProductInfo(fetched, apiKey);
 
         // Keep the record if ANY panel came back, or at least a brand or product
         // name. A front-only photo of a non-food pack ("Power Force Alufolie")
@@ -400,7 +412,7 @@
     // sign: it is inserted at run time instead.
     const PCT = String.fromCharCode(37);
 
-    const PACKAGING_PROMPT = `You are an expert product data extraction AI. Analyze the provided image of ONE product (a package panel or a shelf photo) and extract structured, high-accuracy metadata from the printed panels.
+    const PACKAGING_PROMPT = `You are an expert product data extraction AI. Analyze the provided image or images of ONE product (package panels or a shelf photo) and extract structured, high-accuracy metadata from the printed panels.
 
 Packaging may be in ANY language and ANY script (Latin, Japanese, Chinese, Korean, Cyrillic, Greek, Arabic, Hebrew, Thai, Devanagari, ...). You read them all with equal confidence.
 
@@ -442,7 +454,10 @@ ORIENTATION: photos are often taken sideways or upside down, and seals print the
 =============================================================
 IMAGE HANDLING
 =============================================================
-1. You receive ONE image. Read only what that image shows - a list that wraps around a bottle out of view is partial, never completed
+1. You receive ONE OR MORE images, all of the SAME product - often its front, back and sides. Wherever these instructions say "the image", read "the images": use them together and return ONE object for the product. Read only what they show - a list that wraps around a bottle out of view in every image is partial, never completed
+   - Take each panel from the image where it is most complete and legible
+   - NEVER join two pieces of a list from different images unless the same overlapping words are visible in both. Otherwise return the most complete single piece and set is_partial true
+   - An image that shows a DIFFERENT product is ignored entirely
 2. If several DIFFERENT products are visible (a shelf photo), extract only the product the image is centred on - the one in focus, or the one the shelf label sits under. NEVER merge panels from different packages
 3. If you cannot tell which package a panel belongs to, leave the affected fields null. A wrong pairing is far worse than a null
 4. Front-of-pack marketing is NOT an ingredient list. "Made with real butter", "no added sugar", "100${PCT} natural" never become ingredients
@@ -583,7 +598,7 @@ EXTRACTION RULES
    - "details": a STRING holding any per-nutrient breakdown, joined with "; " - e.g. for a UK traffic light "Fat: RED; Saturates: AMBER; Sugars: GREEN; Salt: AMBER", or for Mexican seals "EXCESO AZÚCARES; EXCESO CALORÍAS". null when there is no breakdown
    - OBSERVED ONLY. NEVER compute, estimate or infer a score from the nutrition table. If no score is printed, return an empty array even when you could calculate one
    - NUTRI-SCORE: return it ONLY when you can clearly see which single letter tile is enlarged. If the badge is small, blurred, far away, at an angle, partly covered, or you are not certain which tile is enlarged, leave the Nutri-Score out. An omitted Nutri-Score is a correct answer; a wrong letter is a serious error
-   - A score must be a badge or seal visible IN THIS IMAGE. A back panel showing a nutrition table but no Nutri-Score badge has NO Nutri-Score - never carry one over from what the front of the pack probably shows
+   - A score must be a badge or seal visible IN ONE OF THE IMAGES. A back panel showing a nutrition table but no Nutri-Score badge has NO Nutri-Score unless another image clearly shows the badge - never carry one over from what the front of the pack probably shows
    - ONLY GRADED SYSTEMS belong here - a scale with a position marked on it. A certification, seal or award is NOT a score and NEVER goes in this array: organic logos and control codes (EU organic leaf, "DE-ÖKO-001", "BE-BIO-02"), Bio-Siegel, Naturland, Bioland, Demeter, Fairtrade, Rainforest Alliance, FSC, PEFC, Der Blaue Engel, OEKO-TEX STANDARD 100 (the 100 is part of the NAME, not a score), Institut Fresenius, DLG, and taste awards (International Taste Institute, Superior Taste Award). Those are claims - put their printed wording in product_claims
    - Empty array [] if none
 
@@ -609,7 +624,7 @@ EXTRACTION RULES
 
    "description" - the product name as printed on the pack:
    - The name plus its flavour / variant as printed ("Leche Entera Lala", "Galletas Marías", "Sport Sunscreen Spray SPF 50", "Butterkekse")
-   - Take it from the front of the pack. If the image shows only a back or side panel, use the legal product name printed there ("Denominación: GALLETAS DULCES", "Verkehrsbezeichnung: Butterkekse", "名称: 清涼飲料水") - drop the heading, keep the name
+   - Take it from the front of the pack. If the images show only a back or side panel, use the legal product name printed there ("Denominación: GALLETAS DULCES", "Verkehrsbezeichnung: Butterkekse", "名称: 清涼飲料水") - drop the heading, keep the name
    - VERBATIM: same words, same script, same capitalisation. Do not translate, re-order, or add a word that is not printed
    - EXCLUDE the net weight / volume, prices, promotions and marketing claims ("Sin gluten", "New!", "20${PCT} more") - claims belong in product_claims
    - Do not use retailer SHELF-LABEL text ("LALA LECHE ENT 1L") when package text is readable - see the shelf-label rule at the top
@@ -636,7 +651,7 @@ MULTILINGUAL PACKAGING
 =============================================================
 STEP-BY-STEP PROCESS
 =============================================================
-1. Identify the product the image is about, and which of its panels are visible
+1. Identify the product the images are about, and which of its panels are visible across them
 2. Inventory which panels are actually present (brand / product name, ingredient declaration, actives table, nutrition/supplement panel, allergen statement, FoP score/seals)
 3. Read each present panel into its field, verbatim; leave every absent panel null/empty
 4. Split raw_text into parsed_list and confirm the two match
@@ -822,22 +837,25 @@ EXAMPLE - a bottled mineral water. No ingredient declaration, and the analysis t
       }
     };
 
-    async function extractProductInfo(imageVariants, apiKey) {
+    // imageParts: the already-fetched inline_data parts, one per image.
+    async function extractProductInfo(imageParts, apiKey) {
       const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`;
 
-      // Fetch the single image with retry logic
-      const imagePart = await fetchImageWithRetry(imageVariants);
-
-      if (!imagePart) {
-        throw new Error('Failed to fetch image');
+      // A single image is sent exactly as before; several are numbered so the
+      // model can tell them apart.
+      const parts = [{ text: PACKAGING_PROMPT }];
+      if (imageParts.length === 1) {
+        parts.push(imageParts[0]);
+      } else {
+        imageParts.forEach((part, index) => {
+          parts.push({ text: `Image ${index + 1} of ${imageParts.length}:` });
+          parts.push(part);
+        });
       }
 
       const payload = {
         contents: [{
-          parts: [
-            { text: PACKAGING_PROMPT },
-            imagePart
-          ]
+          parts: parts
         }],
         generationConfig: PACKAGING_GENERATION_CONFIG
       };
@@ -1202,7 +1220,8 @@ EXAMPLE - a bottled mineral water. No ingredient declaration, and the analysis t
     // absent and the placeholder below is filled as before.
     const agentInputs = (typeof window !== 'undefined' && window.MOZENDA_INPUTS) || {};
 
-    // ONE image per row, from the imageURL field.
+    // ONE product per row, from the imageURL field: a single URL, or several
+    // photos of that product separated by "|".
     const imageUrl = String('imageURL' in agentInputs ? agentInputs.imageURL : '%imageURL%').trim();
 
     const result = await findProductInfo(imageUrl, apiKeyValue);
