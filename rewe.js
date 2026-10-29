@@ -191,11 +191,6 @@
       PACKAGING_MAX_SCORES: 5,
       PACKAGING_MAX_LIST_ITEM_CHARS: 200,
 
-      // Mozenda truncates a long field silently, which would leave
-      // unparseable JSON downstream, so an oversized packaging block is
-      // dropped rather than cut. 0 = no limit.
-      RAW_MAX_TOTAL_CHARS: 8000,
-
       // Net content on the pack vs ITEM_SIZE on the tag: past this gap
       // they are not the same product and the bind is refused.
       BIND_SIZE_TOLERANCE_PCT: 0.02
@@ -1611,21 +1606,10 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
         written++;
       }
 
-      // Last, and under its own budget: the extras caps above would behead
-      // an ingredient list. "packaging" is a reserved key, so an extra
-      // that happened to be called "packaging" cannot displace it.
-      if (packaging) {
-        raw.packaging = packaging;
-        if (CONFIG.RAW_MAX_TOTAL_CHARS > 0) {
-          const withPackaging = JSON.stringify(raw);
-          if (withPackaging.length > CONFIG.RAW_MAX_TOTAL_CHARS) {
-            // Cutting the JSON would leave the cell unparseable, so the
-            // whole block goes rather than half of it. The tag survives.
-            console.warn(`Packaging dropped - RAW_DATA_JSON would be ${withPackaging.length} chars, over the ${CONFIG.RAW_MAX_TOTAL_CHARS} limit`);
-            delete raw.packaging;
-          }
-        }
-      }
+      // Last, so the extras caps above never apply to it. "packaging" is
+      // a reserved key, so an extra that happened to be called
+      // "packaging" cannot displace it.
+      if (packaging) raw.packaging = packaging;
 
       return Object.keys(raw).length > 0 ? JSON.stringify(raw) : '';
     }
