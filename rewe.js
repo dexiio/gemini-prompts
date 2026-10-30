@@ -461,7 +461,7 @@ FIELDS, in the order you will write them:
 10. "organic" - true when the label carries the green "Bio" header card, its brand or name says "Bio" ("EINFACH BIO", "REWE Bio"), or it prints an organic control code ("DE-ÖKO-006")
 
 11. "extras" - anything else printed on THIS tag, as {"key","value"}, values exactly as printed:
-    "name_line", "variety", "origin", "grade", "declaration_note", "package", "size_note", "pack_printed", "total_size_printed", "size_variants", "unit_price_text", "promo_badge", "price_badge", "loyalty_text", "tag_code", "header_line", "has_qr" as above, and "regional" ("true" for the yellow Regional card), "vegan" ("yes" for the V-label or "VEGAN"), "test_rating" ("ÖKO-TEST sehr gut"), "promo_valid_text" (a validity window: "gültig bis 04.11."), "label_type" ("esl_small" for label A, "esl_large" for label B, "paper" for label C, "handwritten")
+    "name_line", "variety", "origin", "grade", "organic_code" (the control code as printed, "DE-ÖKO-006"), "declaration_note", "package", "size_note", "pack_printed", "total_size_printed", "size_variants", "unit_price_text", "promo_badge", "price_badge", "loyalty_text", "tag_code", "header_line", "has_qr" as above, and "regional" ("true" for the yellow Regional card), "vegan" ("yes" for the V-label or "VEGAN"), "test_rating" ("ÖKO-TEST sehr gut"), "promo_valid_text" (a validity window: "gültig bis 04.11."), "label_type" ("esl_small" for label A, "esl_large" for label B, "paper" for label C, "handwritten")
     PFAND is never added to or subtracted from the price: "pfand" (the number alone), "pfand_text" (as printed), "pfand_included" ("true" for "inkl.", "false" for "zzgl."), "pfand_type" ("EINWEG" / "MEHRWEG")
 
 BEFORE YOU ANSWER
@@ -1655,9 +1655,10 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
           printed: unitInfo.printed || formatPrice(unitInfo.amount),
           per: String(label.unitPriceBasis || '').trim()
         };
-        if (unitCheck) raw.unit_price.check = unitCheck;
+        // Always one of three: ok, mismatch, or not_checkable when the
+        // size, basis or units do not allow the comparison.
+        raw.unit_price.check = unitCheck || 'not_checkable';
       }
-      if (label.organic === true) raw.organic = true;
 
       const priceStrings = buildPriceStrings(label.rawPriceStrings);
       if (priceStrings) raw.raw_price_strings = priceStrings;
@@ -1666,6 +1667,22 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       if (confidence) raw.confidence = confidence;
 
       const extras = Array.isArray(label.extras) ? label.extras : [];
+
+      // organic_code is a standard key, not an extra: the control code as
+      // printed ("DE-ÖKO-006"). A printed code is itself the organic mark.
+      const organicCode = extras.find(extra => extra && String(extra.key || '').trim().toLowerCase() === 'organic_code' && !isBlank(extra.value));
+      if (organicCode) raw.organic_code = String(organicCode.value).trim().slice(0, CONFIG.RAW_MAX_VALUE_CHARS);
+      if (label.organic === true || raw.organic_code) raw.organic = true;
+
+      // The package barcode sits at the top level next to the UPC, not
+      // inside packaging. Set before the extras so none can claim the key.
+      if (packaging && packaging.package_barcode) {
+        raw.package_barcode = packaging.package_barcode;
+        packaging = Object.assign({}, packaging);
+        delete packaging.package_barcode;
+        if (Object.keys(packaging).length === 0) packaging = null;
+      }
+
       let written = 0;
       for (const extra of extras) {
         if (!extra || isBlank(extra.key) || isBlank(extra.value)) continue;
@@ -1710,6 +1727,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
         ITEM_SIZE: '',
         ITEM_UOFM: '',
         ITEM_SIZE_UOFM: '',
+        PACK_SIZE: '1',
         IMAGE_URL: imageUrl,
         COUNTRY: country,
         CURRENCY: currency,
@@ -1767,6 +1785,10 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       row.ITEM_SIZE = size === null ? '' : String(size);
       row.ITEM_UOFM = size === null ? '' : uom;
       row.ITEM_SIZE_UOFM = size === null ? '' : (uom ? `${size} ${uom}` : String(size));
+      // Items per package: the n of a printed "n x m" multipack, else 1 -
+      // never empty, downstream needs the default.
+      const packCount = packCountOf(label);
+      row.PACK_SIZE = String(packCount);
 
       // A PLU the model filed as the article number is moved to UPC, and a
       // number that is the PLU is never also shipped as the SKU. A PLU too
@@ -1788,7 +1810,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       if (regular !== null) prices.push({ price: regular, multiple: Number(row.REG_MULTIPLE) });
       if (promo !== null) prices.push({ price: promo, multiple: Number(row.PROMO_MULTIPLE) });
       if (loyalty !== null) prices.push({ price: loyalty, multiple: Number(row.LOYALTY_MULTIPLE) });
-      const unitCheck = checkUnitPrice(prices, size, uom, unitPrice, label.unitPriceBasis, packCountOf(label));
+      const unitCheck = checkUnitPrice(prices, size, uom, unitPrice, label.unitPriceBasis, packCount);
       if (unitCheck === 'mismatch') {
         console.warn(`Unit price ${label.unitPrice}/${label.unitPriceBasis} does not match ${label.regularPrice || label.promoPrice || label.loyaltyPrice} for ${label.itemSize}${label.itemUom} - "${row.DESCRIPTION}"`);
         // One of price, size or unit price was misread; nothing is blanked,
