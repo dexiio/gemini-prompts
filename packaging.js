@@ -1194,7 +1194,7 @@ EXAMPLE - a bottled mineral water. No ingredient declaration, and the analysis t
     // means a digit was not read, so the whole number goes.
     function normalizePackageBarcode(value) {
       const text = cleanText(value);
-      if (text.indexOf('?') !== -1) return null;
+      if (text.indexOf('?') !== -1 || /[a-z]/i.test(text)) return null;
       const digits = text.replace(/D/g, '');
       if (!digits) return null;
       if ([8, 12, 13].indexOf(digits.length) === -1 || !hasValidGtinCheckDigit(digits)) {

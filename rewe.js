@@ -410,6 +410,8 @@ FIELDS, in the order you will write them:
    - The badge text -> extras: "AKTION" -> "promo_badge"; "TIEFPREIS" -> "price_badge"
 
 4. "unitPrice" / "unitPriceBasis" - the small comparison price: "1 kg = 28.84 €" -> "28.84" and "1 kg"; "100 g = 0.76 €" -> "0.76" and "100 g"; "1 l = 1.29 €" -> "1.29" and "1 l". On label C it sits at the bottom beside the barcode
+   - "unitPriceText" - the whole comparison-price token copied exactly as printed, untidied: "1 kg = 15.90", "100 g = 0,76 €", "67.2¢/oz". Keep the symbol, the comma and the basis. null when there is no unit price
+   - CENTS: a unit price printed in cents ("67.2¢", "99 ct") keeps its printed number in "unitPrice" ("67.2", "99") - never converted to euros or dollars
    - READ it off the tag. NEVER divide the price by the size to produce one. A size line reading just "1 kg" with no "=" is a size, not a unit price
    - Several bases for a variable pack -> null, and put the whole string in extras as "unit_price_text"
    - It NEVER goes in a price field. If the only number you can read on a tag is a unit price, that tag has no shelf price - skip it
@@ -473,16 +475,16 @@ BEFORE YOU ANSWER
 EXAMPLES - one per label type.
 
 Label A, regular price:
-{"tagLocation":"shelf 1 from top, tag 1 from left","brand":"MAX KIENE","name":"PISTAZIEN","regularPrice":"6.49","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"28.84","unitPriceBasis":"1 kg","itemSize":"225","itemUom":"g","rawPriceStrings":["6.49","1 kg = 28.84 €"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":null,"productIdCheck":null,"productId":null,"upc":"4003786602259","organic":false,"extras":[{"key":"name_line","value":"PISTAZIEN MAX KIENE"},{"key":"package","value":"Dose"},{"key":"tag_code","value":"510"},{"key":"has_qr","value":"true"},{"key":"label_type","value":"esl_small"}]}
+{"tagLocation":"shelf 1 from top, tag 1 from left","brand":"MAX KIENE","name":"PISTAZIEN","regularPrice":"6.49","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"28.84","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 28.84 €","itemSize":"225","itemUom":"g","rawPriceStrings":["6.49","1 kg = 28.84 €"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":null,"productIdCheck":null,"productId":null,"upc":"4003786602259","organic":false,"extras":[{"key":"name_line","value":"PISTAZIEN MAX KIENE"},{"key":"package","value":"Dose"},{"key":"tag_code","value":"510"},{"key":"has_qr","value":"true"},{"key":"label_type","value":"esl_small"}]}
 
 Label A, AKTION - magenta label, "AKTION" down the left side, one price. The brand cannot be told apart from the name with certainty, so it stays in the name:
-{"tagLocation":"shelf 1 from top, tag 1 from left","brand":null,"name":"SCHWARZW.SCHINKEN W.BRANDENBURG","regularPrice":null,"regularMultiple":null,"promoPrice":"1.49","promoMultiple":"1","loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"14.90","unitPriceBasis":"1 kg","itemSize":"100","itemUom":"g","rawPriceStrings":["1.49","1 kg = 14.90 €"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":null,"productIdCheck":null,"productId":null,"upc":"4070308013824","organic":false,"extras":[{"key":"name_line","value":"SCHWARZW.SCHINKEN W.BRANDENBURG"},{"key":"package","value":"Packung"},{"key":"promo_badge","value":"AKTION"},{"key":"tag_code","value":"193"},{"key":"has_qr","value":"true"},{"key":"label_type","value":"esl_small"}]}
+{"tagLocation":"shelf 1 from top, tag 1 from left","brand":null,"name":"SCHWARZW.SCHINKEN W.BRANDENBURG","regularPrice":null,"regularMultiple":null,"promoPrice":"1.49","promoMultiple":"1","loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"14.90","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 14.90 €","itemSize":"100","itemUom":"g","rawPriceStrings":["1.49","1 kg = 14.90 €"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":null,"productIdCheck":null,"productId":null,"upc":"4070308013824","organic":false,"extras":[{"key":"name_line","value":"SCHWARZW.SCHINKEN W.BRANDENBURG"},{"key":"package","value":"Packung"},{"key":"promo_badge","value":"AKTION"},{"key":"tag_code","value":"193"},{"key":"has_qr","value":"true"},{"key":"label_type","value":"esl_small"}]}
 
 Label B, loose produce - "Speisekartoffeln vorw. festk." / "Laura-rotschalig" / "Deklaration s. Etikett" / "2-Kilogramm-Beutel" / "1 kg = 1.30 €", "2330767   024" under the barcode, big price 2.59:
-{"tagLocation":"shelf 1 from top, tag 1 from left","brand":null,"name":"Speisekartoffeln vorw. festk.","regularPrice":"2.59","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"1.30","unitPriceBasis":"1 kg","itemSize":"2","itemUom":"kg","rawPriceStrings":["2.59","1 kg = 1.30 €"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":"2330767","productIdCheck":"2330767","productId":"2330767","upc":null,"organic":false,"extras":[{"key":"variety","value":"Laura-rotschalig"},{"key":"declaration_note","value":"Deklaration s. Etikett"},{"key":"package","value":"Beutel"},{"key":"tag_code","value":"024"},{"key":"label_type","value":"esl_large"}]}
+{"tagLocation":"shelf 1 from top, tag 1 from left","brand":null,"name":"Speisekartoffeln vorw. festk.","regularPrice":"2.59","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"1.30","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 1.30 €","itemSize":"2","itemUom":"kg","rawPriceStrings":["2.59","1 kg = 1.30 €"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":"2330767","productIdCheck":"2330767","productId":"2330767","upc":null,"organic":false,"extras":[{"key":"variety","value":"Laura-rotschalig"},{"key":"declaration_note","value":"Deklaration s. Etikett"},{"key":"package","value":"Beutel"},{"key":"tag_code","value":"024"},{"key":"label_type","value":"esl_large"}]}
 
 Label C under a TIEFPREIS card - a permanent low price, so it is the regular price:
-{"tagLocation":"shelf 1 from top, tag 1 from left","brand":"JA!","name":"RD-HAMBURGER HACKFL.","regularPrice":"5.49","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"13.73","unitPriceBasis":"1 kg","itemSize":"400","itemUom":"g","rawPriceStrings":["5.49","1 kg = 13.73€"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":"2432136","productIdCheck":"2432136","productId":"2432136","upc":"4388840221592","organic":false,"extras":[{"key":"header_line","value":"2432136 057 0004 24.08.26 0123"},{"key":"package","value":"PK"},{"key":"price_badge","value":"TIEFPREIS"},{"key":"label_type","value":"paper"}]}`;
+{"tagLocation":"shelf 1 from top, tag 1 from left","brand":"JA!","name":"RD-HAMBURGER HACKFL.","regularPrice":"5.49","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"13.73","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 13.73€","itemSize":"400","itemUom":"g","rawPriceStrings":["5.49","1 kg = 13.73€"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":"2432136","productIdCheck":"2432136","productId":"2432136","upc":"4388840221592","organic":false,"extras":[{"key":"header_line","value":"2432136 057 0004 24.08.26 0123"},{"key":"package","value":"PK"},{"key":"price_badge","value":"TIEFPREIS"},{"key":"label_type","value":"paper"}]}`;
     }
 
     // -----------------------------------------------------------------
@@ -655,6 +657,8 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
           loyaltyMultiple: { type: 'STRING', nullable: true },
           unitPrice: { type: 'STRING', nullable: true },
           unitPriceBasis: { type: 'STRING', nullable: true },
+          // The token as printed, so cents vs euros and the basis survive.
+          unitPriceText: { type: 'STRING', nullable: true },
           itemSize: { type: 'STRING', nullable: true },
           itemUom: { type: 'STRING', nullable: true },
           // The whole printed token, "36/0080987", read character by
@@ -708,7 +712,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
           'brand', 'name',
           'regularPrice', 'regularMultiple', 'promoPrice', 'promoMultiple',
           'loyaltyPrice', 'loyaltyMultiple',
-          'unitPrice', 'unitPriceBasis', 'itemSize', 'itemUom',
+          'unitPrice', 'unitPriceBasis', 'unitPriceText', 'itemSize', 'itemUom',
           'rawPriceStrings', 'confidence',
           'productIdPrinted', 'productIdCheck', 'productId', 'upc', 'organic', 'extras'
         ]
@@ -940,37 +944,58 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
 
     // Accepts what a tag prints, in any locale: "1.89", "1,89", "-.99",
     // "2,-", "1.234,56", "1 299 Ft", "89p". Returns a number or null.
-    function parsePrice(value) {
+    // A printed number -> a Number, with no cents conversion. A single
+    // separator followed by 1-2 digits is the decimal point; followed by 3
+    // it is a thousands separator ("2.038"), except after a bare 0
+    // ("0,672"), which can only be a decimal. "7.-" and "1.299,-" are whole
+    // units, so any separator left in them is thousands.
+    function parseAmount(value) {
       if (isBlank(value)) return null;
       let s = String(value).trim();
-      const inCents = /\d\s*(p|¢)$/i.test(s) && !/[.,]/.test(s);
-
       s = s.replace(/^[-–—]\s*(?=[.,]\d)/, '0');
+      const wholeUnits = /[.,]\s*[-–—]+$/.test(s);
       s = s.replace(/[.,]\s*[-–—]+$/, '');
       s = s.replace(/[^\d.,]/g, '');
       if (!/\d/.test(s)) return null;
 
       const sep = Math.max(s.lastIndexOf('.'), s.lastIndexOf(','));
       const decimals = sep === -1 ? 0 : s.length - sep - 1;
-      if (sep !== -1 && decimals >= 1 && decimals <= 2) {
-        s = s.slice(0, sep).replace(/[.,]/g, '') + '.' + s.slice(sep + 1);
+      const intPart = sep === -1 ? s : s.slice(0, sep).replace(/[.,]/g, '');
+      if (!wholeUnits && sep !== -1 && (decimals === 1 || decimals === 2 || (decimals === 3 && /^0*$/.test(intPart)))) {
+        s = intPart + '.' + s.slice(sep + 1);
       } else {
         s = s.replace(/[.,]/g, '');
       }
 
       const n = Number(s);
-      if (!isFinite(n)) return null;
-      return inCents ? n / 100 : n;
+      return isFinite(n) ? n : null;
+    }
+
+    // A value printed in cents: "67.2¢", "99 ct", "99p".
+    function isCents(value) {
+      return /\d\s*(¢|ct\.?|cents?|p)\s*$/i.test(String(isBlank(value) ? '' : value).trim());
+    }
+
+    // A price in main currency units: "67.2¢" -> 0.672, "99 ct" -> 0.99.
+    function parsePrice(value) {
+      const n = parseAmount(value);
+      if (n === null) return null;
+      return isCents(value) ? n / 100 : n;
     }
 
     function formatPrice(n) {
       return n === null ? '' : n.toFixed(2);
     }
 
+    // "1.000" is a thousand, "0,75" three quarters, and in "2 x 200" the
+    // component (200) is the size - the count belongs to the pack.
     function parseQuantity(value) {
       if (isBlank(value)) return null;
-      const n = Number(String(value).replace(',', '.').replace(/[^\d.]/g, ''));
-      return isFinite(n) && n > 0 ? n : null;
+      let s = String(value).trim();
+      const pack = s.match(/^\d+\s*[x×*]\s*(\d.*)$/i);
+      if (pack) s = pack[1];
+      const n = parseAmount(s);
+      return n !== null && n > 0 ? n : null;
     }
 
     function parseMultiple(value, hasPriceValue) {
@@ -1059,22 +1084,29 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
     // their own scale codes this way, often outside the IFPS range, so the
     // printed label - not the range - is what makes it a PLU.
     //
-    // Returns { value, raw }. The UPC column carries the code exactly as
-    // the tag prints it, word included ("PLU43", "PLU541") - the "PLU"
-    // is what tells a short produce code apart from a bad barcode read.
+    // Returns { value, raw }. UPC only ever holds digits, so the value is
+    // the bare code ("541"); the printed text ("PLU541") goes to
+    // RAW_DATA_JSON.plu_raw, and upc_type "plu" is what tells a short
+    // produce code apart from a bad barcode read.
     function labelledPlu(value) {
       const match = String(isBlank(value) ? '' : value).match(/PLU\D{0,3}(\d{1,5})(?!\d)/i);
       if (!match) return { value: '', raw: '' };
-      return { value: match[0].trim(), raw: match[0] };
+      return { value: match[1], raw: match[0].trim() };
     }
 
-    // Returns { value, type }. The UPC goes in the column as printed on
-    // the tag - a PLU keeps its "PLU", an 8- or 12-digit barcode is not
-    // padded to 13. A barcode is either read whole with a matching check
-    // digit or dropped: no rebuilding of partial reads.
+    // Returns { value, type }. UPC holds digits only, as printed - an 8-
+    // or 12-digit barcode is not padded to 13. A barcode is either read
+    // whole with a matching check digit or dropped: no rebuilding of
+    // partial reads.
     function normalizeUpc(value) {
       const plu = labelledPlu(value);
       if (plu.value) return { value: plu.value, type: 'plu', raw: plu.raw };
+      // Words and URLs never become a UPC, even when digits are buried in
+      // them: "https://shop.example/p/4003786602259" is a link, not a scan.
+      if (/[a-z]/i.test(String(isBlank(value) ? '' : value))) {
+        console.warn(`Discarding "${value}" as UPC - it contains letters`);
+        return { value: '', type: '' };
+      }
       // A "?" is a digit the model could not read. Stripping it would leave
       // 12 digits that can pass the check digit as a different UPC-A.
       if (String(isBlank(value) ? '' : value).indexOf('?') !== -1) {
@@ -1097,7 +1129,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
     // was not read, so the whole number goes.
     function normalizePackageBarcode(value) {
       const text = String(isBlank(value) ? '' : value);
-      if (text.indexOf('?') !== -1) return '';
+      if (text.indexOf('?') !== -1 || /[a-z]/i.test(text)) return '';
       const digits = text.replace(/\D/g, '');
       if (!digits) return '';
       if ([8, 12, 13].indexOf(digits.length) === -1 || !hasValidGtinCheckDigit(digits)) {
@@ -1571,9 +1603,42 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       return out.length > 0 ? out : null;
     }
 
+    // The currency unit a printed price NAMES - '' when it names none. A
+    // bare "15.90" is not guessed into euros or cents.
+    function currencyUnitOf(text) {
+      const t = String(isBlank(text) ? '' : text);
+      if (/¢|\d\s*ct\b|\bcents?\b/i.test(t)) return 'cent';
+      if (/€|\bEUR\b/i.test(t)) return 'euro';
+      if (/\$|\bUSD\b/i.test(t)) return 'dollar';
+      if (/£|\bGBP\b|\bCHF\b|\bS?Fr\./i.test(t)) return 'other';
+      return '';
+    }
+
+    // The unit price as the tag prints it, plus what the check needs:
+    //   printed    the token off the tag, untidied ("67.2¢/oz")
+    //   amount     the number in the unit printed (67.2 for "67.2¢")
+    //   effective  amount in main currency units (0.672) - ONLY when the
+    //              currency unit is printed, and only when the amount can
+    //              be found in the printed text, so a number the model
+    //              already converted is not converted twice.
+    function readUnitPrice(label) {
+      const printed = cleanText(label.unitPriceText, CONFIG.RAW_MAX_VALUE_CHARS);
+      const amount = parseAmount(label.unitPrice);
+      if (amount === null && !printed) return null;
+
+      const out = { printed, amount };
+      const currency = currencyUnitOf(`${printed} ${isBlank(label.unitPrice) ? '' : label.unitPrice}`);
+      const amountDigits = String(isBlank(label.unitPrice) ? '' : label.unitPrice).replace(/\D/g, '');
+      const inPrinted = !printed || printed.replace(/\D/g, '').indexOf(amountDigits) !== -1;
+      if (amount !== null && currency && inPrinted) {
+        out.effective = Number((currency === 'cent' ? amount / 100 : amount).toFixed(4));
+      }
+      return out;
+    }
+
     // upc_type tells downstream whether the UPC column holds a PLU or a
     // GTIN.
-    function buildRawJson(label, unitPrice, unitCheck, upcType, packaging, pluRaw) {
+    function buildRawJson(label, unitInfo, unitCheck, upcType, packaging, pluRaw) {
       const raw = {};
       // Where on the fixture this row came from - the reviewer's way back to
       // the tag in the photo, and what the duplicate check keys on.
@@ -1583,8 +1648,13 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       // The printed produce-code text, kept whenever it did not become the
       // UPC (a PLU printed in the article-number slot, say).
       if (pluRaw) raw.plu_raw = pluRaw;
-      if (unitPrice !== null) {
-        raw.unit_price = { printed: formatPrice(unitPrice), per: String(label.unitPriceBasis || '').trim() };
+      // printed is the token as printed, so cents vs euros and the basis
+      // survive; a response without it falls back to the number.
+      if (unitInfo) {
+        raw.unit_price = {
+          printed: unitInfo.printed || formatPrice(unitInfo.amount),
+          per: String(label.unitPriceBasis || '').trim()
+        };
         if (unitCheck) raw.unit_price.check = unitCheck;
       }
       if (label.organic === true) raw.organic = true;
@@ -1708,9 +1778,12 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       if (!upc.value && !upc.raw && pluInId.raw) upc = { value: '', type: '', raw: pluInId.raw };
       row.UPC = upc.value;
       row.SKU = pluInId.raw ? '' : resolveSku(label);
-      if (upc.type === 'plu' && row.SKU === upc.value.replace(/\D/g, '')) row.SKU = '';
+      if (upc.type === 'plu' && row.SKU === upc.value) row.SKU = '';
 
-      const unitPrice = parsePrice(label.unitPrice);
+      // The check compares in main currency units, so a printed "67.2¢"
+      // is checked as 0.672, never as 67.2.
+      const unitInfo = readUnitPrice(label);
+      const unitPrice = unitInfo && unitInfo.effective !== undefined ? unitInfo.effective : parsePrice(label.unitPrice);
       const prices = [];
       if (regular !== null) prices.push({ price: regular, multiple: Number(row.REG_MULTIPLE) });
       if (promo !== null) prices.push({ price: promo, multiple: Number(row.PROMO_MULTIPLE) });
@@ -1723,7 +1796,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
         if (CONFIG.UNIT_PRICE_MISMATCH_FLAG) row.clean = CONFIG.UNIT_PRICE_MISMATCH_FLAG;
       }
 
-      row.RAW_DATA_JSON = buildRawJson(label, unitPrice, unitCheck, upc.type, packaging,
+      row.RAW_DATA_JSON = buildRawJson(label, unitInfo, unitCheck, upc.type, packaging,
         upc.raw && upc.raw !== row.UPC ? upc.raw : '');
 
       return row;

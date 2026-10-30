@@ -404,6 +404,8 @@ FIELDS, in the order you will write them:
    - MULTI-BUY ("2 für 3.00") -> the price is the TOTAL "3.00" and the count goes in that lane's multiple. A single-item price has multiple "1"
 
 4. "unitPrice" / "unitPriceBasis" - the small comparison price (Grundpreis): "19.95/kg" -> "19.95" and "kg"; "1 kg = 4,98" -> "4.98" and "kg"; "je 100 g" -> basis "100g"
+   - "unitPriceText" - the whole comparison-price token copied exactly as printed, untidied: "1 kg = 15.90", "100 g = 0,76 €", "67.2¢/oz". Keep the symbol, the comma and the basis. null when there is no unit price
+   - CENTS: a unit price printed in cents ("67.2¢", "99 ct") keeps its printed number in "unitPrice" ("67.2", "99") - never converted to euros or dollars
    - READ it off the label. NEVER divide the price by the size to produce one
    - Several bases ("7,83/8,19/8,31/kg") -> null, and put the whole string in extras as "unit_price_text"
 
@@ -461,13 +463,13 @@ BEFORE YOU ANSWER
 THREE EXAMPLES.
 
 A regular label, article number read:
-{"tagLocation":"shelf 1 from top, label 2 from left","brand":"MOSER ROTH","name":"Trüffelpralinen","regularPrice":"3.99","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"19.95","unitPriceBasis":"kg","itemSize":"200","itemUom":"g","rawPriceStrings":["3.99","19.95/kg"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":"637739|4|F1","productIdCheck":"637739","productId":"637739","upc":null,"organic":false,"extras":[{"key":"label_type","value":"paper"}]}
+{"tagLocation":"shelf 1 from top, label 2 from left","brand":"MOSER ROTH","name":"Trüffelpralinen","regularPrice":"3.99","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"19.95","unitPriceBasis":"kg","unitPriceText":"19.95/kg","itemSize":"200","itemUom":"g","rawPriceStrings":["3.99","19.95/kg"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":"637739|4|F1","productIdCheck":"637739","productId":"637739","upc":null,"organic":false,"extras":[{"key":"label_type","value":"paper"}]}
 
 The same label in poorer light - the fifth digit could be a 3 or an 8, so it is "?" and the article number is not captured. The row is still worth returning:
-{"tagLocation":"shelf 1 from top, label 2 from left","brand":"MOSER ROTH","name":"Trüffelpralinen","regularPrice":"3.99","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"19.95","unitPriceBasis":"kg","itemSize":"200","itemUom":"g","rawPriceStrings":["3.99","19.95/kg"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"low"},"productIdPrinted":"6377?9|4|F1","productIdCheck":"6377?9","productId":null,"upc":null,"organic":false,"extras":[{"key":"label_type","value":"paper"}]}
+{"tagLocation":"shelf 1 from top, label 2 from left","brand":"MOSER ROTH","name":"Trüffelpralinen","regularPrice":"3.99","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"19.95","unitPriceBasis":"kg","unitPriceText":"19.95/kg","itemSize":"200","itemUom":"g","rawPriceStrings":["3.99","19.95/kg"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"low"},"productIdPrinted":"6377?9|4|F1","productIdCheck":"6377?9","productId":null,"upc":null,"organic":false,"extras":[{"key":"label_type","value":"paper"}]}
 
 A red electronic promotion label - big price 2.49, small struck-through 2.99 to its right, badge "NUR FÜR KURZE ZEIT":
-{"tagLocation":"shelf 3 from top, label 1 from left","brand":"CUCINA","name":"Pesto Genovese","regularPrice":"2.99","regularMultiple":"1","promoPrice":"2.49","promoMultiple":"1","loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"13.11","unitPriceBasis":"kg","itemSize":"190","itemUom":"g","rawPriceStrings":["2.49","2.99","13.11/kg"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"medium"},"productIdPrinted":null,"productIdCheck":null,"productId":null,"upc":null,"organic":false,"extras":[{"key":"label_type","value":"esl_eink"},{"key":"promo_badge","value":"NUR FÜR KURZE ZEIT"}]}`;
+{"tagLocation":"shelf 3 from top, label 1 from left","brand":"CUCINA","name":"Pesto Genovese","regularPrice":"2.99","regularMultiple":"1","promoPrice":"2.49","promoMultiple":"1","loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"13.11","unitPriceBasis":"kg","unitPriceText":"13.11/kg","itemSize":"190","itemUom":"g","rawPriceStrings":["2.49","2.99","13.11/kg"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"medium"},"productIdPrinted":null,"productIdCheck":null,"productId":null,"upc":null,"organic":false,"extras":[{"key":"label_type","value":"esl_eink"},{"key":"promo_badge","value":"NUR FÜR KURZE ZEIT"}]}`;
     }
 
     // -----------------------------------------------------------------
@@ -634,6 +636,8 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
           loyaltyMultiple: { type: 'STRING', nullable: true },
           unitPrice: { type: 'STRING', nullable: true },
           unitPriceBasis: { type: 'STRING', nullable: true },
+          // The token as printed, so cents vs euros and the basis survive.
+          unitPriceText: { type: 'STRING', nullable: true },
           itemSize: { type: 'STRING', nullable: true },
           itemUom: { type: 'STRING', nullable: true },
           // The whole printed token, "637739|4|F1", read character by
@@ -687,7 +691,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
           'brand', 'name',
           'regularPrice', 'regularMultiple', 'promoPrice', 'promoMultiple',
           'loyaltyPrice', 'loyaltyMultiple',
-          'unitPrice', 'unitPriceBasis', 'itemSize', 'itemUom',
+          'unitPrice', 'unitPriceBasis', 'unitPriceText', 'itemSize', 'itemUom',
           'rawPriceStrings', 'confidence',
           'productIdPrinted', 'productIdCheck', 'productId', 'upc', 'organic', 'extras'
         ]
@@ -919,37 +923,58 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
 
     // Accepts what a tag prints, in any locale: "1.89", "1,89", "-.99",
     // "2,-", "1.234,56", "1 299 Ft", "89p". Returns a number or null.
-    function parsePrice(value) {
+    // A printed number -> a Number, with no cents conversion. A single
+    // separator followed by 1-2 digits is the decimal point; followed by 3
+    // it is a thousands separator ("2.038"), except after a bare 0
+    // ("0,672"), which can only be a decimal. "7.-" and "1.299,-" are whole
+    // units, so any separator left in them is thousands.
+    function parseAmount(value) {
       if (isBlank(value)) return null;
       let s = String(value).trim();
-      const inCents = /\d\s*(p|¢)$/i.test(s) && !/[.,]/.test(s);
-
       s = s.replace(/^[-–—]\s*(?=[.,]\d)/, '0');
+      const wholeUnits = /[.,]\s*[-–—]+$/.test(s);
       s = s.replace(/[.,]\s*[-–—]+$/, '');
       s = s.replace(/[^\d.,]/g, '');
       if (!/\d/.test(s)) return null;
 
       const sep = Math.max(s.lastIndexOf('.'), s.lastIndexOf(','));
       const decimals = sep === -1 ? 0 : s.length - sep - 1;
-      if (sep !== -1 && decimals >= 1 && decimals <= 2) {
-        s = s.slice(0, sep).replace(/[.,]/g, '') + '.' + s.slice(sep + 1);
+      const intPart = sep === -1 ? s : s.slice(0, sep).replace(/[.,]/g, '');
+      if (!wholeUnits && sep !== -1 && (decimals === 1 || decimals === 2 || (decimals === 3 && /^0*$/.test(intPart)))) {
+        s = intPart + '.' + s.slice(sep + 1);
       } else {
         s = s.replace(/[.,]/g, '');
       }
 
       const n = Number(s);
-      if (!isFinite(n)) return null;
-      return inCents ? n / 100 : n;
+      return isFinite(n) ? n : null;
+    }
+
+    // A value printed in cents: "67.2¢", "99 ct", "99p".
+    function isCents(value) {
+      return /\d\s*(¢|ct\.?|cents?|p)\s*$/i.test(String(isBlank(value) ? '' : value).trim());
+    }
+
+    // A price in main currency units: "67.2¢" -> 0.672, "99 ct" -> 0.99.
+    function parsePrice(value) {
+      const n = parseAmount(value);
+      if (n === null) return null;
+      return isCents(value) ? n / 100 : n;
     }
 
     function formatPrice(n) {
       return n === null ? '' : n.toFixed(2);
     }
 
+    // "1.000" is a thousand, "0,75" three quarters, and in "2 x 200" the
+    // component (200) is the size - the count belongs to the pack.
     function parseQuantity(value) {
       if (isBlank(value)) return null;
-      const n = Number(String(value).replace(',', '.').replace(/[^\d.]/g, ''));
-      return isFinite(n) && n > 0 ? n : null;
+      let s = String(value).trim();
+      const pack = s.match(/^\d+\s*[x×*]\s*(\d.*)$/i);
+      if (pack) s = pack[1];
+      const n = parseAmount(s);
+      return n !== null && n > 0 ? n : null;
     }
 
     function parseMultiple(value, hasPriceValue) {
@@ -1046,22 +1071,35 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
     // their own scale codes this way, often outside the IFPS range, so the
     // printed label - not the range - is what makes it a PLU.
     //
-    // Returns { value, raw }. The UPC column carries the code exactly as
-    // the tag prints it, word included ("PLU43", "PLU541") - the "PLU"
-    // is what tells a short produce code apart from a bad barcode read.
+    // Returns { value, raw }. UPC only ever holds digits, so the value is
+    // the bare code ("541"); the printed text ("PLU541") goes to
+    // RAW_DATA_JSON.plu_raw, and upc_type "plu" is what tells a short
+    // produce code apart from a bad barcode read.
     function labelledPlu(value) {
       const match = String(isBlank(value) ? '' : value).match(/PLU\D{0,3}(\d{1,5})(?!\d)/i);
       if (!match) return { value: '', raw: '' };
-      return { value: match[0].trim(), raw: match[0] };
+      return { value: match[1], raw: match[0].trim() };
     }
 
-    // Returns { value, type }. The UPC goes in the column as printed on
-    // the tag - a PLU keeps its "PLU", an 8- or 12-digit barcode is not
-    // padded to 13. A barcode is either read whole with a matching check
-    // digit or dropped: no rebuilding of partial reads.
+    // Returns { value, type }. UPC holds digits only, as printed - an 8-
+    // or 12-digit barcode is not padded to 13. A barcode is either read
+    // whole with a matching check digit or dropped: no rebuilding of
+    // partial reads.
     function normalizeUpc(value) {
       const plu = labelledPlu(value);
       if (plu.value) return { value: plu.value, type: 'plu', raw: plu.raw };
+      // Words and URLs never become a UPC, even when digits are buried in
+      // them: "https://shop.example/p/4003786602259" is a link, not a scan.
+      if (/[a-z]/i.test(String(isBlank(value) ? '' : value))) {
+        console.warn(`Discarding "${value}" as UPC - it contains letters`);
+        return { value: '', type: '' };
+      }
+      // A "?" is a digit the model could not read. Stripping it would leave
+      // 12 digits that can pass the check digit as a different UPC-A.
+      if (String(isBlank(value) ? '' : value).indexOf('?') !== -1) {
+        console.log(`UPC withheld - "${value}" has unconfirmed digits`);
+        return { value: '', type: '' };
+      }
       const digits = String(isBlank(value) ? '' : value).replace(/\D/g, '');
       if (!digits) return { value: '', type: '' };
       if (isPlu(digits)) return { value: digits, type: 'plu' };
@@ -1078,7 +1116,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
     // was not read, so the whole number goes.
     function normalizePackageBarcode(value) {
       const text = String(isBlank(value) ? '' : value);
-      if (text.indexOf('?') !== -1) return '';
+      if (text.indexOf('?') !== -1 || /[a-z]/i.test(text)) return '';
       const digits = text.replace(/\D/g, '');
       if (!digits) return '';
       if ([8, 12, 13].indexOf(digits.length) === -1 || !hasValidGtinCheckDigit(digits)) {
@@ -1568,9 +1606,42 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       return out.length > 0 ? out : null;
     }
 
+    // The currency unit a printed price NAMES - '' when it names none. A
+    // bare "15.90" is not guessed into euros or cents.
+    function currencyUnitOf(text) {
+      const t = String(isBlank(text) ? '' : text);
+      if (/¢|\d\s*ct\b|\bcents?\b/i.test(t)) return 'cent';
+      if (/€|\bEUR\b/i.test(t)) return 'euro';
+      if (/\$|\bUSD\b/i.test(t)) return 'dollar';
+      if (/£|\bGBP\b|\bCHF\b|\bS?Fr\./i.test(t)) return 'other';
+      return '';
+    }
+
+    // The unit price as the tag prints it, plus what the check needs:
+    //   printed    the token off the tag, untidied ("67.2¢/oz")
+    //   amount     the number in the unit printed (67.2 for "67.2¢")
+    //   effective  amount in main currency units (0.672) - ONLY when the
+    //              currency unit is printed, and only when the amount can
+    //              be found in the printed text, so a number the model
+    //              already converted is not converted twice.
+    function readUnitPrice(label) {
+      const printed = cleanText(label.unitPriceText, CONFIG.RAW_MAX_VALUE_CHARS);
+      const amount = parseAmount(label.unitPrice);
+      if (amount === null && !printed) return null;
+
+      const out = { printed, amount };
+      const currency = currencyUnitOf(`${printed} ${isBlank(label.unitPrice) ? '' : label.unitPrice}`);
+      const amountDigits = String(isBlank(label.unitPrice) ? '' : label.unitPrice).replace(/\D/g, '');
+      const inPrinted = !printed || printed.replace(/\D/g, '').indexOf(amountDigits) !== -1;
+      if (amount !== null && currency && inPrinted) {
+        out.effective = Number((currency === 'cent' ? amount / 100 : amount).toFixed(4));
+      }
+      return out;
+    }
+
     // upc_type tells downstream whether the UPC column holds a PLU or a
     // GTIN.
-    function buildRawJson(label, unitPrice, unitCheck, upcType, packaging, pluRaw) {
+    function buildRawJson(label, unitInfo, unitCheck, upcType, packaging, pluRaw) {
       const raw = {};
       // Where on the fixture this row came from - the reviewer's way back to
       // the tag in the photo, and what the duplicate check keys on.
@@ -1580,8 +1651,13 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       // The printed produce-code text, kept whenever it did not become the
       // UPC (a PLU printed in the article-number slot, say).
       if (pluRaw) raw.plu_raw = pluRaw;
-      if (unitPrice !== null) {
-        raw.unit_price = { printed: formatPrice(unitPrice), per: String(label.unitPriceBasis || '').trim() };
+      // printed is the token as printed, so cents vs euros and the basis
+      // survive; a response without it falls back to the number.
+      if (unitInfo) {
+        raw.unit_price = {
+          printed: unitInfo.printed || formatPrice(unitInfo.amount),
+          per: String(label.unitPriceBasis || '').trim()
+        };
         if (unitCheck) raw.unit_price.check = unitCheck;
       }
       if (label.organic === true) raw.organic = true;
@@ -1705,9 +1781,12 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       if (!upc.value && !upc.raw && pluInId.raw) upc = { value: '', type: '', raw: pluInId.raw };
       row.UPC = upc.value;
       row.SKU = pluInId.raw ? '' : resolveSku(label);
-      if (upc.type === 'plu' && row.SKU === upc.value.replace(/\D/g, '')) row.SKU = '';
+      if (upc.type === 'plu' && row.SKU === upc.value) row.SKU = '';
 
-      const unitPrice = parsePrice(label.unitPrice);
+      // The check compares in main currency units, so a printed "67.2¢"
+      // is checked as 0.672, never as 67.2.
+      const unitInfo = readUnitPrice(label);
+      const unitPrice = unitInfo && unitInfo.effective !== undefined ? unitInfo.effective : parsePrice(label.unitPrice);
       const prices = [];
       if (regular !== null) prices.push({ price: regular, multiple: Number(row.REG_MULTIPLE) });
       if (promo !== null) prices.push({ price: promo, multiple: Number(row.PROMO_MULTIPLE) });
@@ -1722,7 +1801,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
         if (CONFIG.UNIT_PRICE_MISMATCH_FLAG) row.clean = CONFIG.UNIT_PRICE_MISMATCH_FLAG;
       }
 
-      row.RAW_DATA_JSON = buildRawJson(label, unitPrice, unitCheck, upc.type, packaging,
+      row.RAW_DATA_JSON = buildRawJson(label, unitInfo, unitCheck, upc.type, packaging,
         upc.raw && upc.raw !== row.UPC ? upc.raw : '');
 
       return row;
