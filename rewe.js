@@ -184,7 +184,7 @@
       // Strict. false also accepts "medium"; nothing ever accepts "low".
       PACKAGING_REQUIRE_HIGH_CONFIDENCE: true,
 
-      PACKAGING_MAX_INGREDIENT_CHARS: 2000,
+      PACKAGING_MAX_INGREDIENT_CHARS: 10000,
       PACKAGING_MAX_PARSED_ITEMS: 80,
       PACKAGING_MAX_NUTRIENTS: 30,
       PACKAGING_MAX_CLAIMS: 15,
