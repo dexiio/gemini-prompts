@@ -406,6 +406,7 @@ FIELDS, in the order you will write them:
    - The word after it ("Packung", "Glas", "Flasche", "Becher", "Dose", "Beutel") is the package -> extras "package"
    - "versch. Größen z.B. 220g" -> the example size "220" and "g", plus the whole line in extras "size_note"
    - A MULTIPACK ("6x120 ml") -> the COMPONENT is the size: "120" and "ml", plus extras "pack_printed" = "6x120 ml". When a total is also printed ("2 x 200 ml = 400 ml"), add extras "total_size_printed" = "400 ml"
+   - A PACK COUNT with no component size ("6er Pack", "6-Pack", "2ER PACK") -> extras "pack_printed" as printed. The count is never "itemSize"; a net quantity printed beside it is still the size
    - SEVERAL ALTERNATIVE SIZES ("225/250 g Packung", "395/360/377 g") -> both null, plus extras "size_variants"
    - Never take a size from the packaging
 
@@ -1167,12 +1168,16 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       return matches ? 'ok' : 'mismatch';
     }
 
-    // The n of a multipack, from the "pack_printed" extra ("6x120 ml").
-    // 1 when there is none.
+    // The items in a package, from the "pack_printed" extra: "6x120 ml",
+    // "6er Pack", "6-Pack", "6pk", "pack of 6". 1 when there is none. The
+    // number must sit against the pack word, so "400 g PK" is not a count.
     function packCountOf(label) {
       const extras = Array.isArray(label.extras) ? label.extras : [];
       const pack = extras.find(extra => extra && String(extra.key || '').toLowerCase() === 'pack_printed');
-      const match = pack ? String(pack.value || '').match(/(\d+)\s*[x×*]\s*\d/i) : null;
+      const text = pack ? String(pack.value || '') : '';
+      const match = text.match(/(\d+)\s*[x×*]\s*\d/i) ||
+        text.match(/(\d+)\s*-?\s*(?:er\b|pack|pk\b)/i) ||
+        text.match(/\bpack\s+of\s+(\d+)/i);
       const count = match ? Number(match[1]) : 1;
       return count > 1 ? count : 1;
     }
@@ -1767,7 +1772,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       row.ITEM_SIZE = size === null ? '' : String(size);
       row.ITEM_UOFM = size === null ? '' : uom;
       row.ITEM_SIZE_UOFM = size === null ? '' : (uom ? `${size} ${uom}` : String(size));
-      // Items per package: the n of a printed "n x m" multipack, else 1 -
+      // Items per package: the count printed for a multipack, else 1 -
       // never empty, downstream needs the default.
       const packCount = packCountOf(label);
       row.PACK_SIZE = String(packCount);
