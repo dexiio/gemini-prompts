@@ -999,11 +999,14 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
     // ALL-CAPS text ("NATUR LIEBLINGE") is title-cased; anything already
     // mixed case is kept exactly as printed, so German noun capitalisation
     // and lowercase adjectives ("Spitzpaprika rot") survive.
+    // Sentence case, always: the first letter capital, every other letter
+    // lower case, whatever the tag prints ("MOSER ROTH" -> "Moser roth",
+    // "Snack Paprika" -> "Snack paprika"). German nouns after the first
+    // word are lowered too - that is the agreed output format.
     function displayCase(value) {
       if (isBlank(value)) return '';
-      const s = String(value).trim().replace(/\s+/g, ' ');
-      if (s !== s.toUpperCase() || s === s.toLowerCase()) return s;
-      return s.toLowerCase().replace(/(^|[\s\-\/(&+])(\S)/g, (m, sep, ch) => sep + ch.toUpperCase());
+      const s = String(value).trim().replace(/\s+/g, ' ').toLowerCase();
+      return s.replace(/\p{L}/u, ch => ch.toUpperCase());
     }
 
     // Brand + name, without doubling a brand the name already starts with
@@ -1963,7 +1966,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
 
       const brand = displayCase(label.brand);
       row.BRAND = brand;
-      row.DESCRIPTION = buildDescription(brand, displayCase(label.name));
+      row.DESCRIPTION = displayCase(buildDescription(brand, displayCase(label.name)));
 
       const size = parseQuantity(label.itemSize);
       const uom = normalizeUom(label.itemUom);
