@@ -996,9 +996,6 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       return UOM_MAP[key] || raw;
     }
 
-    // ALL-CAPS text ("NATUR LIEBLINGE") is title-cased; anything already
-    // mixed case is kept exactly as printed, so German noun capitalisation
-    // and lowercase adjectives ("Spitzpaprika rot") survive.
     // Sentence case, always: the first letter capital, every other letter
     // lower case, whatever the tag prints ("MOSER ROTH" -> "Moser roth",
     // "Snack Paprika" -> "Snack paprika"). German nouns after the first
