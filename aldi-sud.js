@@ -516,6 +516,8 @@ FIELDS:
 - "nameOnPack" / "brandOnPack" - the name and brand AS PRINTED ON THE PACKAGE, verbatim. null if not legible. These exist so SECTION C's bind can be checked - they are NOT copies of the tag
 - "netContent" - the net quantity printed on the pack, as printed ("400 g", "3 x 90 ml", "0,5 l"). Never from the tag
 - "barcode" - the number printed under the barcode ON THIS PACK, all 8, 12 or 13 digits, copied exactly as printed, left to right. If ANY digit will not resolve, null - never a "?", never a guessed or dropped digit. The barcode is usually on the back or the bottom, so null is the normal answer on a shelf photo. Never from the tag, never from memory
+- "originOnPack" - the country-of-origin statement printed ON THIS PACK, verbatim, WITHOUT its heading: "Herkunft: Spanien" -> "Spanien", "Ursprung: Italien" -> "Italien", "Ursprungsland: Peru" -> "Peru", "Made in Germany" -> "Germany". ONLY an explicit origin statement - a manufacturer or distributor address ("Hergestellt für Lidl, Neckarsulm") is NOT an origin, and neither is "EU-Landwirtschaft / Nicht-EU-Landwirtschaft". null if not printed or not legible. Never from the tag, never from the brand or the language
+- "organicCodeOnPack" - the organic control code printed ON THIS PACK, as printed ("DE-ÖKO-006"). null if not printed or not legible. Never from the tag
 - "ingredients.rawText" - the exact declaration after the heading, line wraps joined with one space and wrap-hyphens removed. Same words, order, punctuation, script and capitalisation. Do NOT translate or re-order. Do NOT include the "Contains:" sentence
 - "ingredients.parsedList" - the same declaration as an array, one entry per top-level ingredient, in printed order, each verbatim INCLUDING its percentage and parenthesised sub-ingredients. A comma INSIDE parentheses does not start a new entry. Joined back together it must reproduce rawText. [] when rawText is null
 - "ingredients.isPartial" - a real BOOLEAN. true when the list is cut off, curves out of view, blurs mid-list or is hidden. false when read heading to end. null when there is no ingredient text
@@ -715,6 +717,8 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
           brandOnPack: { type: 'STRING', nullable: true },
           netContent: { type: 'STRING', nullable: true },
           barcode: { type: 'STRING', nullable: true },
+          originOnPack: { type: 'STRING', nullable: true },
+          organicCodeOnPack: { type: 'STRING', nullable: true },
 
           ingredients: {
             type: 'OBJECT',
@@ -793,6 +797,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
         propertyOrdering: [
           'tagIndex', 'bindConfidence', 'bindBasis',
           'nameOnPack', 'brandOnPack', 'netContent', 'barcode',
+          'originOnPack', 'organicCodeOnPack',
           'ingredients', 'nutritionFacts', 'productClaims',
           'healthScores', 'languageCode'
         ]
@@ -1305,6 +1310,12 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       if (net) out.net_content = net;
       const barcode = normalizePackageBarcode(pkg.barcode);
       if (barcode) out.package_barcode = barcode;
+      // Origin and organic code as printed on the pack. buildRawJson lifts
+      // them to the top level when the tag has none of its own.
+      const originOnPack = cleanText(pkg.originOnPack, CONFIG.PACKAGING_MAX_LIST_ITEM_CHARS);
+      if (originOnPack) out.origin_on_pack = originOnPack;
+      const organicCodeOnPack = cleanText(pkg.organicCodeOnPack, CONFIG.PACKAGING_MAX_LIST_ITEM_CHARS);
+      if (organicCodeOnPack) out.organic_code_on_pack = organicCodeOnPack;
 
       const src = pkg.ingredients && typeof pkg.ingredients === 'object' ? pkg.ingredients : {};
       const ingredients = {};
@@ -1646,6 +1657,149 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
 
     // upc_type tells downstream whether the UPC column holds a PLU or a
     // GTIN.
+    // -----------------------------------------------------------------
+    // Country of origin
+    //
+    // The printed origin ("Italien", "Spanien / Marokko", "s. Etikett") is
+    // mapped to ISO 3166-1 alpha-2 by THIS TABLE, never by the model.
+    // value is set only when exactly one country is recognised; printed
+    // always keeps the text. Text naming no country in the table
+    // ("s. Etikett", "EU") gives no country_of_origin - the tag's verbatim
+    // line is still in the "origin" extra.
+    // Names: lowercase, accents stripped, ß -> ss, words joined by a single
+    // space. One name per array entry, so multi-word names stay whole.
+    // -----------------------------------------------------------------
+    const ORIGIN_NAMES = {
+      DE: ['deutschland', 'germany', 'allemagne', 'germania', 'alemania', 'duitsland', 'niemcy', 'nemecko', 'nemetorszag'],
+      AT: ['osterreich', 'oesterreich', 'austria', 'autriche', 'oostenrijk'],
+      CH: ['schweiz', 'switzerland', 'suisse', 'svizzera', 'suiza', 'zwitserland'],
+      NL: ['niederlande', 'holland', 'netherlands', 'pays bas', 'paesi bassi', 'paises bajos', 'nederland', 'holandia'],
+      BE: ['belgien', 'belgium', 'belgique', 'belgio', 'belgica', 'belgie'],
+      LU: ['luxemburg', 'luxembourg', 'lussemburgo'],
+      FR: ['frankreich', 'france', 'francia', 'frankrijk', 'francja'],
+      IT: ['italien', 'italy', 'italie', 'italia', 'wlochy'],
+      ES: ['spanien', 'spain', 'espagne', 'spagna', 'espana', 'spanje', 'hiszpania'],
+      PT: ['portugal', 'portogallo', 'portugalia'],
+      GR: ['griechenland', 'greece', 'grece', 'grecia', 'griekenland', 'grecja'],
+      CY: ['zypern', 'cyprus', 'chypre', 'cipro', 'chipre'],
+      MT: ['malta', 'malte'],
+      IE: ['irland', 'ireland', 'irlande', 'irlanda', 'ierland'],
+      GB: ['grossbritannien', 'vereinigtes konigreich', 'vereinigtes koenigreich', 'united kingdom', 'great britain',
+        'england', 'schottland', 'scotland', 'wales', 'nordirland', 'northern ireland', 'royaume uni', 'regno unito', 'reino unido'],
+      DK: ['danemark', 'daenemark', 'denmark', 'danimarca', 'dinamarca', 'denemarken', 'dania'],
+      SE: ['schweden', 'sweden', 'suede', 'svezia', 'suecia', 'zweden', 'szwecja'],
+      NO: ['norwegen', 'norway', 'norvege', 'norvegia', 'noruega', 'noorwegen', 'norwegia'],
+      FI: ['finnland', 'finland', 'finlande', 'finlandia'],
+      IS: ['island', 'iceland', 'islande', 'islanda', 'islandia', 'ijsland'],
+      PL: ['polen', 'poland', 'pologne', 'polonia', 'polska'],
+      CZ: ['tschechien', 'tschechische republik', 'czech republic', 'czechia', 'republique tcheque', 'repubblica ceca',
+        'chequia', 'tsjechie', 'czechy'],
+      SK: ['slowakei', 'slovakia', 'slovaquie', 'slovacchia', 'eslovaquia', 'slowakije', 'slowacja'],
+      HU: ['ungarn', 'hungary', 'hongrie', 'ungheria', 'hungria', 'hongarije', 'wegry'],
+      SI: ['slowenien', 'slovenia', 'slovenie', 'eslovenia'],
+      HR: ['kroatien', 'croatia', 'croatie', 'croazia', 'croacia', 'kroatie', 'chorwacja'],
+      RS: ['serbien', 'serbia', 'serbie'],
+      RO: ['rumanien', 'rumaenien', 'romania', 'roumanie', 'rumania', 'roemenie', 'rumunia'],
+      BG: ['bulgarien', 'bulgaria', 'bulgarie', 'bulgarije'],
+      LT: ['litauen', 'lithuania', 'lituanie', 'lituania', 'litouwen', 'litwa'],
+      LV: ['lettland', 'latvia', 'lettonie', 'lettonia', 'letonia', 'letland', 'lotwa'],
+      EE: ['estland', 'estonia', 'estonie'],
+      UA: ['ukraine', 'ucraina', 'ucrania', 'oekraine', 'ukraina'],
+      MD: ['moldau', 'moldawien', 'moldova'],
+      TR: ['turkei', 'tuerkei', 'turkey', 'turquie', 'turchia', 'turquia', 'turkije', 'turcja', 'turkiye'],
+      IL: ['israel', 'israele'],
+      EG: ['agypten', 'aegypten', 'egypt', 'egypte', 'egitto', 'egipto', 'egipt'],
+      MA: ['marokko', 'morocco', 'maroc', 'marocco', 'marruecos', 'maroko'],
+      TN: ['tunesien', 'tunisia', 'tunisie', 'tunez'],
+      ZA: ['sudafrika', 'suedafrika', 'south africa', 'afrique du sud', 'zuid afrika'],
+      KE: ['kenia', 'kenya'],
+      SN: ['senegal'],
+      CI: ['elfenbeinkuste', 'elfenbeinkueste', 'ivory coast', 'cote d ivoire', 'costa d avorio', 'costa de marfil'],
+      GH: ['ghana'],
+      US: ['usa', 'vereinigte staaten', 'united states', 'etats unis', 'stati uniti', 'estados unidos', 'verenigde staten'],
+      CA: ['kanada', 'canada'],
+      MX: ['mexiko', 'mexico', 'mexique', 'messico'],
+      GT: ['guatemala'],
+      HN: ['honduras'],
+      CR: ['costa rica'],
+      PA: ['panama'],
+      DO: ['dominikanische republik', 'dominican republic', 'republique dominicaine', 'repubblica dominicana', 'republica dominicana'],
+      CO: ['kolumbien', 'colombia', 'colombie'],
+      EC: ['ecuador', 'equateur'],
+      PE: ['peru', 'perou'],
+      BR: ['brasilien', 'brazil', 'bresil', 'brasile', 'brasil'],
+      CL: ['chile', 'cile'],
+      AR: ['argentinien', 'argentina', 'argentine'],
+      UY: ['uruguay'],
+      IN: ['indien', 'india', 'inde'],
+      LK: ['sri lanka'],
+      CN: ['china', 'chine', 'cina'],
+      VN: ['vietnam', 'viet nam'],
+      TH: ['thailand', 'thailande', 'tailandia'],
+      ID: ['indonesien', 'indonesia', 'indonesie'],
+      AU: ['australien', 'australia', 'australie'],
+      NZ: ['neuseeland', 'new zealand', 'nouvelle zelande', 'nuova zelanda', 'nueva zelanda', 'nieuw zeeland']
+    };
+    const ORIGIN_COUNTRIES = {};
+    Object.keys(ORIGIN_NAMES).forEach(code => {
+      ORIGIN_NAMES[code].forEach(name => { ORIGIN_COUNTRIES[name] = code; });
+    });
+
+    // ISO codes named in a printed origin, in printed order, no repeats.
+    // A two-letter code printed in capitals ("Herkunft: ES") counts too,
+    // but only for a code in the table.
+    function originCodes(text) {
+      if (isBlank(text)) return [];
+      const raw = String(text);
+      const words = raw.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss')
+        .toLowerCase().replace(/[^a-z]+/g, ' ').trim().split(' ').filter(Boolean);
+      const capitals = raw.replace(/[^A-Za-z]+/g, ' ').trim().split(' ');
+      const found = [];
+      for (let i = 0; i < words.length; i++) {
+        let code = '';
+        for (let len = 3; len >= 1 && !code; len--) {
+          if (i + len > words.length) continue;
+          const phrase = words.slice(i, i + len).join(' ');
+          if (ORIGIN_COUNTRIES[phrase]) {
+            code = ORIGIN_COUNTRIES[phrase];
+            i += len - 1;
+          }
+        }
+        if (!code && words[i].length === 2) {
+          const upper = words[i].toUpperCase();
+          if (ORIGIN_NAMES[upper] && capitals.indexOf(upper) !== -1) code = upper;
+        }
+        if (code && found.indexOf(code) === -1) found.push(code);
+      }
+      return found;
+    }
+
+    function originFrom(text, source) {
+      const printed = cleanText(text, CONFIG.RAW_MAX_VALUE_CHARS);
+      if (!printed) return null;
+      const codes = originCodes(printed);
+      if (codes.length === 0) return null;
+      const out = {};
+      if (codes.length === 1) out.value = codes[0];
+      out.printed = printed;
+      out.source = source;
+      return out;
+    }
+
+    // The tag first; the pack only when the tag names no country (no
+    // origin line, or one that reads "s. Etikett"). A pack is only here
+    // when its bind was "high" and checkBind() agreed.
+    function buildCountryOfOrigin(label, packaging) {
+      const extras = Array.isArray(label.extras) ? label.extras : [];
+      const tagOrigin = extras.find(extra => extra && String(extra.key || '').trim().toLowerCase() === 'origin' && !isBlank(extra.value));
+      const fromTag = tagOrigin ? originFrom(tagOrigin.value, 'tag') : null;
+      const fromPack = packaging ? originFrom(packaging.origin_on_pack, 'pack') : null;
+      if (fromTag && fromPack && fromTag.value && fromPack.value && fromTag.value !== fromPack.value) {
+        console.warn(`Origin on the tag (${fromTag.printed}) and on the pack (${fromPack.printed}) disagree - keeping the tag`);
+      }
+      return fromTag || fromPack;
+    }
+
     function buildRawJson(label, unitInfo, unitCheck, upcType, packaging, pluRaw) {
       const raw = {};
       // Where on the fixture this row came from - the reviewer's way back to
@@ -1680,7 +1834,30 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       // printed ("DE-ÖKO-006"). A printed code is itself the organic mark.
       const organicCode = extras.find(extra => extra && String(extra.key || '').trim().toLowerCase() === 'organic_code' && !isBlank(extra.value));
       if (organicCode) raw.organic_code = String(organicCode.value).trim().slice(0, CONFIG.RAW_MAX_VALUE_CHARS);
-      if (label.organic === true || raw.organic_code) raw.organic = true;
+      if (label.organic === true || raw.organic_code) {
+        raw.organic = true;
+      } else if (packaging && packaging.organic_code_on_pack) {
+        // The tag shows no organic mark, but the bound pack prints a code.
+        raw.organic_code = packaging.organic_code_on_pack.slice(0, CONFIG.RAW_MAX_VALUE_CHARS);
+        raw.organic = true;
+        packaging = Object.assign({}, packaging);
+        delete packaging.organic_code_on_pack;
+        if (Object.keys(packaging).length === 0) packaging = null;
+      }
+
+      // Tag first, pack second - see buildCountryOfOrigin. The pack's text
+      // leaves the packaging block when it is the one used.
+      const origin = buildCountryOfOrigin(label, packaging);
+      if (origin) {
+        if (origin.source === 'pack') {
+          packaging = Object.assign({}, packaging);
+          delete packaging.origin_on_pack;
+          if (Object.keys(packaging).length === 0) packaging = null;
+        }
+        // source is only for choosing above; it is not written out.
+        delete origin.source;
+        raw.country_of_origin = origin;
+      }
 
       // The package barcode sits at the top level next to the UPC, not
       // inside packaging. Set before the extras so none can claim the key.
