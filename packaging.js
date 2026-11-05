@@ -853,7 +853,8 @@ No markdown fences, no text outside the object. NEVER guess.`;
       if (isBlank(value)) return '';
       const raw = String(value).trim();
       const key = raw.toLowerCase().replace(/[\s.]/g, '');
-      return UOM_MAP[key] || raw;
+      // Unknown units fall back to Sentence case, like Ea / Pk / Ct ("BTL" -> "Btl").
+      return UOM_MAP[key] || displayCase(raw);
     }
 
     // Sentence case, always: the first letter capital, every other letter
