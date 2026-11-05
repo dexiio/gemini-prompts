@@ -399,6 +399,7 @@ FIELDS, in the order you will write them:
      The lines under it go to extras: the variety ("Granny Smith", "Laura-rotschalig") -> "variety", "Ursprung: Italien" -> "origin" = "Italien", "Klasse I" -> "grade" = "I", "Deklaration s. Etikett" -> "declaration_note"
    - Label C: the capitals line(s) under the top line are the name; the line under them is the brand ("JA!", "FEINE WELT", "RIBWORLD", "EINFACH BIO", even a short code like "WB")
    - A name broken over two lines is joined with a space
+   "brandDisplay" / "nameDisplay" - the SAME brand and name again, written in Proper Case for display. Every word starts with a capital and the rest is lower case; small words (und, oder, mit, ohne, aus, in, im, auf, von, zum, zur, für, der, die, das, and, of, the, with) stay lower case unless they are the first word; a brand you know is written in its own official spelling ("TRADER JOE'S" -> "Trader Joe's", "MOSER ROTH" -> "Moser Roth", "SCHOKO-FRUCHTAUFSTRICH MIT KIRSCHEN" -> "Schoko-Fruchtaufstrich mit Kirschen"). Same words, same abbreviations, same order as "brand" / "name" - ONLY the capitals change. Never translate, never expand an abbreviation, never add a word. null when "brand" / "name" is null
 
 3. PRICES - the cents are printed smaller and raised: a big "6" with a small "49" is "6.49". Read every digit left to right - do not drop the first one. Return a dot decimal with no symbol: "6,49" -> "6.49". "-.99" is "0.99", "7.-" and "7,-" are "7.00"
    - ONE price -> "regularPrice"
@@ -476,16 +477,16 @@ BEFORE YOU ANSWER
 EXAMPLES - one per label type.
 
 Label A, regular price:
-{"tagLocation":"shelf 1 from top, tag 1 from left","brand":"MAX KIENE","name":"PISTAZIEN","regularPrice":"6.49","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"28.84","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 28.84 €","itemSize":"225","itemUom":"g","rawPriceStrings":["6.49","1 kg = 28.84 €"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":null,"productIdCheck":null,"productId":null,"upc":"4003786602259","organic":false,"extras":[{"key":"name_line","value":"PISTAZIEN MAX KIENE"},{"key":"package","value":"Dose"},{"key":"tag_code","value":"510"},{"key":"has_qr","value":"true"},{"key":"label_type","value":"esl_small"}]}
+{"tagLocation":"shelf 1 from top, tag 1 from left","brand":"MAX KIENE","name":"PISTAZIEN","brandDisplay":"Max Kiene","nameDisplay":"Pistazien","regularPrice":"6.49","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"28.84","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 28.84 €","itemSize":"225","itemUom":"g","rawPriceStrings":["6.49","1 kg = 28.84 €"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":null,"productIdCheck":null,"productId":null,"upc":"4003786602259","organic":false,"extras":[{"key":"name_line","value":"PISTAZIEN MAX KIENE"},{"key":"package","value":"Dose"},{"key":"tag_code","value":"510"},{"key":"has_qr","value":"true"},{"key":"label_type","value":"esl_small"}]}
 
 Label A, AKTION - magenta label, "AKTION" down the left side, one price. The brand cannot be told apart from the name with certainty, so it stays in the name:
-{"tagLocation":"shelf 1 from top, tag 1 from left","brand":null,"name":"SCHWARZW.SCHINKEN W.BRANDENBURG","regularPrice":null,"regularMultiple":null,"promoPrice":"1.49","promoMultiple":"1","loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"14.90","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 14.90 €","itemSize":"100","itemUom":"g","rawPriceStrings":["1.49","1 kg = 14.90 €"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":null,"productIdCheck":null,"productId":null,"upc":"4070308013824","organic":false,"extras":[{"key":"name_line","value":"SCHWARZW.SCHINKEN W.BRANDENBURG"},{"key":"package","value":"Packung"},{"key":"promo_badge","value":"AKTION"},{"key":"tag_code","value":"193"},{"key":"has_qr","value":"true"},{"key":"label_type","value":"esl_small"}]}
+{"tagLocation":"shelf 1 from top, tag 1 from left","brand":null,"name":"SCHWARZW.SCHINKEN W.BRANDENBURG","brandDisplay":null,"nameDisplay":"Schwarzw.Schinken W.Brandenburg","regularPrice":null,"regularMultiple":null,"promoPrice":"1.49","promoMultiple":"1","loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"14.90","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 14.90 €","itemSize":"100","itemUom":"g","rawPriceStrings":["1.49","1 kg = 14.90 €"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":null,"productIdCheck":null,"productId":null,"upc":"4070308013824","organic":false,"extras":[{"key":"name_line","value":"SCHWARZW.SCHINKEN W.BRANDENBURG"},{"key":"package","value":"Packung"},{"key":"promo_badge","value":"AKTION"},{"key":"tag_code","value":"193"},{"key":"has_qr","value":"true"},{"key":"label_type","value":"esl_small"}]}
 
 Label B, loose produce - "Speisekartoffeln vorw. festk." / "Laura-rotschalig" / "Deklaration s. Etikett" / "2-Kilogramm-Beutel" / "1 kg = 1.30 €", "2330767   024" under the barcode, big price 2.59:
-{"tagLocation":"shelf 1 from top, tag 1 from left","brand":null,"name":"Speisekartoffeln vorw. festk.","regularPrice":"2.59","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"1.30","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 1.30 €","itemSize":"2","itemUom":"kg","rawPriceStrings":["2.59","1 kg = 1.30 €"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":"2330767","productIdCheck":"2330767","productId":"2330767","upc":null,"organic":false,"extras":[{"key":"variety","value":"Laura-rotschalig"},{"key":"declaration_note","value":"Deklaration s. Etikett"},{"key":"package","value":"Beutel"},{"key":"tag_code","value":"024"},{"key":"label_type","value":"esl_large"}]}
+{"tagLocation":"shelf 1 from top, tag 1 from left","brand":null,"name":"Speisekartoffeln vorw. festk.","brandDisplay":null,"nameDisplay":"Speisekartoffeln Vorw. Festk.","regularPrice":"2.59","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"1.30","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 1.30 €","itemSize":"2","itemUom":"kg","rawPriceStrings":["2.59","1 kg = 1.30 €"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":"2330767","productIdCheck":"2330767","productId":"2330767","upc":null,"organic":false,"extras":[{"key":"variety","value":"Laura-rotschalig"},{"key":"declaration_note","value":"Deklaration s. Etikett"},{"key":"package","value":"Beutel"},{"key":"tag_code","value":"024"},{"key":"label_type","value":"esl_large"}]}
 
 Label C under a TIEFPREIS card - a permanent low price, so it is the regular price:
-{"tagLocation":"shelf 1 from top, tag 1 from left","brand":"JA!","name":"RD-HAMBURGER HACKFL.","regularPrice":"5.49","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"13.73","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 13.73€","itemSize":"400","itemUom":"g","rawPriceStrings":["5.49","1 kg = 13.73€"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":"2432136","productIdCheck":"2432136","productId":"2432136","upc":"4388840221592","organic":false,"extras":[{"key":"header_line","value":"2432136 057 0004 24.08.26 0123"},{"key":"package","value":"PK"},{"key":"price_badge","value":"TIEFPREIS"},{"key":"label_type","value":"paper"}]}`;
+{"tagLocation":"shelf 1 from top, tag 1 from left","brand":"JA!","name":"RD-HAMBURGER HACKFL.","brandDisplay":"ja!","nameDisplay":"Rd-Hamburger Hackfl.","regularPrice":"5.49","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"13.73","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 13.73€","itemSize":"400","itemUom":"g","rawPriceStrings":["5.49","1 kg = 13.73€"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":"2432136","productIdCheck":"2432136","productId":"2432136","upc":"4388840221592","organic":false,"extras":[{"key":"header_line","value":"2432136 057 0004 24.08.26 0123"},{"key":"package","value":"PK"},{"key":"price_badge","value":"TIEFPREIS"},{"key":"label_type","value":"paper"}]}`;
     }
 
     // -----------------------------------------------------------------
@@ -652,6 +653,8 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
           // No country / currency: Germany only, filled from the pin.
           brand: { type: 'STRING', nullable: true },
           name: { type: 'STRING', nullable: true },
+          brandDisplay: { type: 'STRING', nullable: true },
+          nameDisplay: { type: 'STRING', nullable: true },
           regularPrice: { type: 'STRING', nullable: true },
           regularMultiple: { type: 'STRING', nullable: true },
           promoPrice: { type: 'STRING', nullable: true },
@@ -712,7 +715,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
         // the grade could only rationalise a number already committed.
         propertyOrdering: [
           'tagLocation',
-          'brand', 'name',
+          'brand', 'name', 'brandDisplay', 'nameDisplay',
           'regularPrice', 'regularMultiple', 'promoPrice', 'promoMultiple',
           'loyaltyPrice', 'loyaltyMultiple',
           'unitPrice', 'unitPriceBasis', 'unitPriceText', 'itemSize', 'itemUom',
@@ -1014,18 +1017,41 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       if (isBlank(value)) return '';
       const raw = String(value).trim();
       const key = raw.toLowerCase().replace(/[\s.]/g, '');
-      // Unknown units fall back to Sentence case, like Ea / Pk / Ct ("BTL" -> "Btl").
-      return UOM_MAP[key] || displayCase(raw);
+      // Unknown units fall back to Title case, like Ea / Pk / Ct ("BTL" -> "Btl").
+      return UOM_MAP[key] || titleCase(raw);
     }
 
-    // Sentence case, always: the first letter capital, every other letter
-    // lower case, whatever the tag prints ("MOSER ROTH" -> "Moser roth",
-    // "Snack Paprika" -> "Snack paprika"). German nouns after the first
-    // word are lowered too - that is the agreed output format.
-    function displayCase(value) {
+    // Small words kept lower case inside a title (never as the first word).
+    const MINOR_WORDS = new Set([
+      // English
+      'a', 'an', 'the', 'and', 'or', 'nor', 'but', 'of', 'in', 'on', 'at',
+      'to', 'for', 'with', 'by', 'from', 'as', 'is', 'are', 'per', 'vs',
+      // German
+      'und', 'oder', 'mit', 'ohne', 'in', 'im', 'an', 'am', 'auf', 'aus',
+      'bei', 'von', 'vom', 'zu', 'zum', 'zur', 'für', 'nach', 'über', 'unter',
+      'der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'einer', 'je'
+    ]);
+
+    // Title case: every word starts with a capital and the rest is lower
+    // case, except the small words above when they are not the first word
+    // ("MOSER ROTH" -> "Moser Roth", "KARTOFFELN MIT SCHALE" -> "Kartoffeln
+    // mit Schale"). A word starts after a space, - / ( & or +.
+    function titleCase(value) {
       if (isBlank(value)) return '';
       const s = String(value).trim().replace(/\s+/g, ' ').toLowerCase();
-      return s.replace(/\p{L}/u, ch => ch.toUpperCase());
+      return s.replace(/(^|[\s\-\/(&+])(\p{L})(\p{L}*)/gu, (m, sep, ch, rest, offset) =>
+        offset > 0 && sep === ' ' && MINOR_WORDS.has(ch + rest) ? m : sep + ch.toUpperCase() + rest);
+    }
+
+    // BRAND and DESCRIPTION casing comes from the model: it returns
+    // brandDisplay / nameDisplay in Proper Case next to the verbatim
+    // brand / name, and knows brand spellings code cannot ("Trader Joe's",
+    // "ja!"). Its text is used as given. When it is missing, or still all
+    // capitals, the verbatim text is title-cased here instead.
+    function displayCase(shown, raw) {
+      const s = isBlank(shown) ? '' : String(shown).trim().replace(/\s+/g, ' ');
+      if (s && s !== s.toUpperCase()) return s;
+      return titleCase(s || raw);
     }
 
     // Brand + name, without doubling a brand the name already starts with
@@ -1959,9 +1985,9 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       row.LOYALTY_PRICE = formatPrice(loyalty);
       row.LOYALTY_MULTIPLE = parseMultiple(label.loyaltyMultiple, loyalty !== null);
 
-      const brand = displayCase(label.brand);
+      const brand = displayCase(label.brandDisplay, label.brand);
       row.BRAND = brand;
-      row.DESCRIPTION = displayCase(buildDescription(brand, displayCase(label.name)));
+      row.DESCRIPTION = buildDescription(brand, displayCase(label.nameDisplay, label.name));
 
       const size = parseQuantity(label.itemSize);
       const uom = normalizeUom(label.itemUom);

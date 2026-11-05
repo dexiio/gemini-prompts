@@ -383,6 +383,7 @@ FIELDS, in the order you will write them:
 
 3. "brand" - the small capitals line above the name ("TRADER JOE'S", "GUT BIO", "MILSANI", "CHOCEUR", "MOSER ROTH"), exactly as printed. null if there is none
    "name" - the bold line under it ("Pecankerne"), exactly as printed, in its own language. Join a name broken over two lines with a space. Never translate it, never put the brand in it
+   "brandDisplay" / "nameDisplay" - the SAME brand and name again, written in Proper Case for display. Every word starts with a capital and the rest is lower case; small words (und, oder, mit, ohne, aus, in, im, auf, von, zum, zur, für, der, die, das, and, of, the, with) stay lower case unless they are the first word; a brand you know is written in its own official spelling ("TRADER JOE'S" -> "Trader Joe's", "MOSER ROTH" -> "Moser Roth", "SCHOKO-FRUCHTAUFSTRICH MIT KIRSCHEN" -> "Schoko-Fruchtaufstrich mit Kirschen"). Same words, same abbreviations, same order as "brand" / "name" - ONLY the capitals change. Never translate, never expand an abbreviation, never add a word. null when "brand" / "name" is null
 
 4. PRICES - the large number at the bottom-right. Read every digit left to right, return a dot decimal with no symbol: "4,49" -> "4.49". "-.99" is "0.99", "2,-" is "2.00"
    - ONE price -> "regularPrice"
@@ -461,13 +462,13 @@ BEFORE YOU ANSWER
 THREE EXAMPLES.
 
 A regular label, article number and barcode read:
-{"tagLocation":"shelf 1 from top, label 1 from left","country":"DE","currency":"€","brand":"TRADER JOE'S","name":"Pecankerne","regularPrice":"4.49","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"22.45","unitPriceBasis":"kg","unitPriceText":"kg = 22.45 €","itemSize":"200","itemUom":"g","rawPriceStrings":["4.49","kg = 22.45 €"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":"1000748","productIdCheck":"1000748","productId":"1000748","barcodeDigits":"2009010007489","upc":null,"organic":false,"extras":[{"key":"origin","value":"s. Etikett"},{"key":"package","value":"Packung"},{"key":"label_type","value":"paper"}]}
+{"tagLocation":"shelf 1 from top, label 1 from left","country":"DE","currency":"€","brand":"TRADER JOE'S","name":"Pecankerne","brandDisplay":"Trader Joe's","nameDisplay":"Pecankerne","regularPrice":"4.49","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"22.45","unitPriceBasis":"kg","unitPriceText":"kg = 22.45 €","itemSize":"200","itemUom":"g","rawPriceStrings":["4.49","kg = 22.45 €"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":"1000748","productIdCheck":"1000748","productId":"1000748","barcodeDigits":"2009010007489","upc":null,"organic":false,"extras":[{"key":"origin","value":"s. Etikett"},{"key":"package","value":"Packung"},{"key":"label_type","value":"paper"}]}
 
 The same label in poorer light - the fifth digit could be a 7 or a 1, so it is "?" and the article number is not captured; the barcode digits are too faint to read whole. The row is still worth returning:
-{"tagLocation":"shelf 1 from top, label 1 from left","country":"DE","currency":"€","brand":"TRADER JOE'S","name":"Pecankerne","regularPrice":"4.49","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"22.45","unitPriceBasis":"kg","unitPriceText":"kg = 22.45 €","itemSize":"200","itemUom":"g","rawPriceStrings":["4.49","kg = 22.45 €"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"low"},"productIdPrinted":"1000?48","productIdCheck":"1000?48","productId":null,"barcodeDigits":null,"upc":null,"organic":false,"extras":[{"key":"origin","value":"s. Etikett"},{"key":"package","value":"Packung"},{"key":"label_type","value":"paper"}]}
+{"tagLocation":"shelf 1 from top, label 1 from left","country":"DE","currency":"€","brand":"TRADER JOE'S","name":"Pecankerne","brandDisplay":"Trader Joe's","nameDisplay":"Pecankerne","regularPrice":"4.49","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"22.45","unitPriceBasis":"kg","unitPriceText":"kg = 22.45 €","itemSize":"200","itemUom":"g","rawPriceStrings":["4.49","kg = 22.45 €"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"low"},"productIdPrinted":"1000?48","productIdCheck":"1000?48","productId":null,"barcodeDigits":null,"upc":null,"organic":false,"extras":[{"key":"origin","value":"s. Etikett"},{"key":"package","value":"Packung"},{"key":"label_type","value":"paper"}]}
 
 A promotion label - big price 2.49, small struck-through 2.99 beside it, badge "AKTION":
-{"tagLocation":"shelf 3 from top, label 1 from left","country":"DE","currency":"€","brand":"CUCINA","name":"Pesto Genovese","regularPrice":"2.99","regularMultiple":"1","promoPrice":"2.49","promoMultiple":"1","loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"13.11","unitPriceBasis":"kg","unitPriceText":"kg = 13.11 €","itemSize":"190","itemUom":"g","rawPriceStrings":["2.49","2.99","kg = 13.11 €"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"medium"},"productIdPrinted":null,"productIdCheck":null,"productId":null,"barcodeDigits":null,"upc":null,"organic":false,"extras":[{"key":"package","value":"Glas"},{"key":"label_type","value":"paper"},{"key":"promo_badge","value":"AKTION"}]}`;
+{"tagLocation":"shelf 3 from top, label 1 from left","country":"DE","currency":"€","brand":"CUCINA","name":"Pesto Genovese","brandDisplay":"Cucina","nameDisplay":"Pesto Genovese","regularPrice":"2.99","regularMultiple":"1","promoPrice":"2.49","promoMultiple":"1","loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"13.11","unitPriceBasis":"kg","unitPriceText":"kg = 13.11 €","itemSize":"190","itemUom":"g","rawPriceStrings":["2.49","2.99","kg = 13.11 €"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"medium"},"productIdPrinted":null,"productIdCheck":null,"productId":null,"barcodeDigits":null,"upc":null,"organic":false,"extras":[{"key":"package","value":"Glas"},{"key":"label_type","value":"paper"},{"key":"promo_badge","value":"AKTION"}]}`;
     }
 
     // -----------------------------------------------------------------
@@ -630,6 +631,8 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
           currency: { type: 'STRING', nullable: true },
           brand: { type: 'STRING', nullable: true },
           name: { type: 'STRING', nullable: true },
+          brandDisplay: { type: 'STRING', nullable: true },
+          nameDisplay: { type: 'STRING', nullable: true },
           regularPrice: { type: 'STRING', nullable: true },
           regularMultiple: { type: 'STRING', nullable: true },
           promoPrice: { type: 'STRING', nullable: true },
@@ -694,7 +697,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
         // the grade could only rationalise a number already committed.
         propertyOrdering: [
           'tagLocation',
-          'country', 'currency', 'brand', 'name',
+          'country', 'currency', 'brand', 'name', 'brandDisplay', 'nameDisplay',
           'regularPrice', 'regularMultiple', 'promoPrice', 'promoMultiple',
           'loyaltyPrice', 'loyaltyMultiple',
           'unitPrice', 'unitPriceBasis', 'unitPriceText', 'itemSize', 'itemUom',
@@ -996,18 +999,41 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       if (isBlank(value)) return '';
       const raw = String(value).trim();
       const key = raw.toLowerCase().replace(/[\s.]/g, '');
-      // Unknown units fall back to Sentence case, like Ea / Pk / Ct ("BTL" -> "Btl").
-      return UOM_MAP[key] || displayCase(raw);
+      // Unknown units fall back to Title case, like Ea / Pk / Ct ("BTL" -> "Btl").
+      return UOM_MAP[key] || titleCase(raw);
     }
 
-    // Sentence case, always: the first letter capital, every other letter
-    // lower case, whatever the tag prints ("MOSER ROTH" -> "Moser roth",
-    // "Snack Paprika" -> "Snack paprika"). German nouns after the first
-    // word are lowered too - that is the agreed output format.
-    function displayCase(value) {
+    // Small words kept lower case inside a title (never as the first word).
+    const MINOR_WORDS = new Set([
+      // English
+      'a', 'an', 'the', 'and', 'or', 'nor', 'but', 'of', 'in', 'on', 'at',
+      'to', 'for', 'with', 'by', 'from', 'as', 'is', 'are', 'per', 'vs',
+      // German
+      'und', 'oder', 'mit', 'ohne', 'in', 'im', 'an', 'am', 'auf', 'aus',
+      'bei', 'von', 'vom', 'zu', 'zum', 'zur', 'für', 'nach', 'über', 'unter',
+      'der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'einer', 'je'
+    ]);
+
+    // Title case: every word starts with a capital and the rest is lower
+    // case, except the small words above when they are not the first word
+    // ("MOSER ROTH" -> "Moser Roth", "KARTOFFELN MIT SCHALE" -> "Kartoffeln
+    // mit Schale"). A word starts after a space, - / ( & or +.
+    function titleCase(value) {
       if (isBlank(value)) return '';
       const s = String(value).trim().replace(/\s+/g, ' ').toLowerCase();
-      return s.replace(/\p{L}/u, ch => ch.toUpperCase());
+      return s.replace(/(^|[\s\-\/(&+])(\p{L})(\p{L}*)/gu, (m, sep, ch, rest, offset) =>
+        offset > 0 && sep === ' ' && MINOR_WORDS.has(ch + rest) ? m : sep + ch.toUpperCase() + rest);
+    }
+
+    // BRAND and DESCRIPTION casing comes from the model: it returns
+    // brandDisplay / nameDisplay in Proper Case next to the verbatim
+    // brand / name, and knows brand spellings code cannot ("Trader Joe's",
+    // "ja!"). Its text is used as given. When it is missing, or still all
+    // capitals, the verbatim text is title-cased here instead.
+    function displayCase(shown, raw) {
+      const s = isBlank(shown) ? '' : String(shown).trim().replace(/\s+/g, ' ');
+      if (s && s !== s.toUpperCase()) return s;
+      return titleCase(s || raw);
     }
 
     // Brand + name, without doubling a brand the name already starts with
@@ -2003,9 +2029,9 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       row.LOYALTY_PRICE = formatPrice(loyalty);
       row.LOYALTY_MULTIPLE = parseMultiple(label.loyaltyMultiple, loyalty !== null);
 
-      const brand = displayCase(label.brand);
+      const brand = displayCase(label.brandDisplay, label.brand);
       row.BRAND = brand;
-      row.DESCRIPTION = displayCase(buildDescription(brand, displayCase(label.name)));
+      row.DESCRIPTION = buildDescription(brand, displayCase(label.nameDisplay, label.name));
 
       const size = parseQuantity(label.itemSize);
       const uom = normalizeUom(label.itemUom);

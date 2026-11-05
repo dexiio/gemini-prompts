@@ -385,6 +385,7 @@ FIELDS, in the order you will write them:
 2. "brand" - the small uppercase line at the top-left ("DULANO", "MARIBEL", "MISTER CHOC", "METZGERFRISCH", "VEMONDO"), exactly as printed. null if there is none
    "name" - the bold line(s) under it, exactly as printed, in its own language. A name broken over two lines is joined with a space ("Hähnchenbrust" + "Paprika/Curry" -> "Hähnchenbrust Paprika/Curry"; "Schoko-" + "Fruchtaufstrich" -> "Schoko-Fruchtaufstrich"). Never translate it, never put the brand in it
    - The thin VARIANT line under the name ("verschiedene Sorten", "creamy/crunchy", "Erdbeere/Kirsche/Aprikose", "z.B. Paprika Trio") is NOT part of the name -> extras "variant"
+   "brandDisplay" / "nameDisplay" - the SAME brand and name again, written in Proper Case for display. Every word starts with a capital and the rest is lower case; small words (und, oder, mit, ohne, aus, in, im, auf, von, zum, zur, für, der, die, das, and, of, the, with) stay lower case unless they are the first word; a brand you know is written in its own official spelling ("TRADER JOE'S" -> "Trader Joe's", "MOSER ROTH" -> "Moser Roth", "SCHOKO-FRUCHTAUFSTRICH MIT KIRSCHEN" -> "Schoko-Fruchtaufstrich mit Kirschen"). Same words, same abbreviations, same order as "brand" / "name" - ONLY the capitals change. Never translate, never expand an abbreviation, never add a word. null when "brand" / "name" is null
 
 3. PRICES - the cents are printed smaller and raised: a big "1" with a small "59" is "1.59". Read every digit left to right - do not drop the first one. Return a dot decimal with no symbol: "1,59" -> "1.59". "-.99" is "0.99", "7.-" and "7,-" are "7.00"
    - ONE price -> "regularPrice"
@@ -457,16 +458,16 @@ BEFORE YOU ANSWER
 EXAMPLES. The first two are the same tag - which one you write depends only on whether the article number resolved.
 
 Read it (a close-up of three tags):
-{"tagLocation":"shelf 1 from top, tag 2 from left","brand":"DULANO","name":"Hähnchenbrust Paprika/Curry","regularPrice":"1.59","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"15.90","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 15.90","itemSize":"100","itemUom":"g","rawPriceStrings":["1.59","1 kg = 15.90"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":"0080987","productIdCheck":"0080987","productId":"0080987","upc":null,"organic":false,"extras":[{"key":"variant","value":"verschiedene Sorten"},{"key":"package","value":"Packung"},{"key":"has_qr","value":"true"},{"key":"label_type","value":"esl_eink"}]}
+{"tagLocation":"shelf 1 from top, tag 2 from left","brand":"DULANO","name":"Hähnchenbrust Paprika/Curry","brandDisplay":"Dulano","nameDisplay":"Hähnchenbrust Paprika/Curry","regularPrice":"1.59","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"15.90","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 15.90","itemSize":"100","itemUom":"g","rawPriceStrings":["1.59","1 kg = 15.90"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":"0080987","productIdCheck":"0080987","productId":"0080987","upc":null,"organic":false,"extras":[{"key":"variant","value":"verschiedene Sorten"},{"key":"package","value":"Packung"},{"key":"has_qr","value":"true"},{"key":"label_type","value":"esl_eink"}]}
 
 Same tag, poorer light - the sixth digit could be an 8 or a 3, so it is "?" and the article number is not captured. The row is still worth returning:
-{"tagLocation":"shelf 1 from top, tag 2 from left","brand":"DULANO","name":"Hähnchenbrust Paprika/Curry","regularPrice":"1.59","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"15.90","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 15.90","itemSize":"100","itemUom":"g","rawPriceStrings":["1.59","1 kg = 15.90"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"low"},"productIdPrinted":"00809?7","productIdCheck":"00809?7","productId":null,"upc":null,"organic":false,"extras":[{"key":"variant","value":"verschiedene Sorten"},{"key":"package","value":"Packung"},{"key":"has_qr","value":"true"},{"key":"label_type","value":"esl_eink"}]}
+{"tagLocation":"shelf 1 from top, tag 2 from left","brand":"DULANO","name":"Hähnchenbrust Paprika/Curry","brandDisplay":"Dulano","nameDisplay":"Hähnchenbrust Paprika/Curry","regularPrice":"1.59","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"15.90","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 15.90","itemSize":"100","itemUom":"g","rawPriceStrings":["1.59","1 kg = 15.90"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"low"},"productIdPrinted":"00809?7","productIdCheck":"00809?7","productId":null,"upc":null,"organic":false,"extras":[{"key":"variant","value":"verschiedene Sorten"},{"key":"package","value":"Packung"},{"key":"has_qr","value":"true"},{"key":"label_type","value":"esl_eink"}]}
 
 Promo tag - "BILLIGER" bubble, old price 1.49 struck through, big price 1.39:
-{"tagLocation":"shelf 2 from top, tag 1 from left","brand":"DULANO","name":"Gebackene Hähnchenbrust","regularPrice":"1.49","regularMultiple":"1","promoPrice":"1.39","promoMultiple":"1","loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"17.38","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 17.38","itemSize":"80","itemUom":"g","rawPriceStrings":["1.49","1.39","1 kg = 17.38"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"low"},"productIdPrinted":null,"productIdCheck":null,"productId":null,"upc":null,"organic":false,"extras":[{"key":"variant","value":"verschiedene Sorten"},{"key":"package","value":"Packung"},{"key":"promo_badge","value":"BILLIGER"},{"key":"label_type","value":"esl_eink"}]}
+{"tagLocation":"shelf 2 from top, tag 1 from left","brand":"DULANO","name":"Gebackene Hähnchenbrust","brandDisplay":"Dulano","nameDisplay":"Gebackene Hähnchenbrust","regularPrice":"1.49","regularMultiple":"1","promoPrice":"1.39","promoMultiple":"1","loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"17.38","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 17.38","itemSize":"80","itemUom":"g","rawPriceStrings":["1.49","1.39","1 kg = 17.38"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"low"},"productIdPrinted":null,"productIdCheck":null,"productId":null,"upc":null,"organic":false,"extras":[{"key":"variant","value":"verschiedene Sorten"},{"key":"package","value":"Packung"},{"key":"promo_badge","value":"BILLIGER"},{"key":"label_type","value":"esl_eink"}]}
 
 Loose produce - "Nektarinen" / "Sorte: gelbfleischig, Klasse: I" / "Ursprung: siehe Artikel" / "1 kg", "STE,R,ANK" and "PLU541" beside the square code, "1 kg = 1.89", big price 1.89, no brand line:
-{"tagLocation":"shelf 1 from top, tag 1 from left","brand":null,"name":"Nektarinen","regularPrice":"1.89","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"1.89","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 1.89","itemSize":"1","itemUom":"kg","rawPriceStrings":["1.89","1 kg = 1.89"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":null,"productIdCheck":null,"productId":null,"upc":"PLU541","organic":false,"extras":[{"key":"variety","value":"gelbfleischig"},{"key":"grade","value":"I"},{"key":"origin","value":"siehe Artikel"},{"key":"tag_code","value":"STE,R,ANK"},{"key":"has_qr","value":"true"},{"key":"label_type","value":"produce_sign"}]}`;
+{"tagLocation":"shelf 1 from top, tag 1 from left","brand":null,"name":"Nektarinen","brandDisplay":null,"nameDisplay":"Nektarinen","regularPrice":"1.89","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"1.89","unitPriceBasis":"1 kg","unitPriceText":"1 kg = 1.89","itemSize":"1","itemUom":"kg","rawPriceStrings":["1.89","1 kg = 1.89"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":null,"productIdCheck":null,"productId":null,"upc":"PLU541","organic":false,"extras":[{"key":"variety","value":"gelbfleischig"},{"key":"grade","value":"I"},{"key":"origin","value":"siehe Artikel"},{"key":"tag_code","value":"STE,R,ANK"},{"key":"has_qr","value":"true"},{"key":"label_type","value":"produce_sign"}]}`;
     }
 
     // -----------------------------------------------------------------
@@ -634,6 +635,8 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
           // No country / currency: Germany only, filled from the pin.
           brand: { type: 'STRING', nullable: true },
           name: { type: 'STRING', nullable: true },
+          brandDisplay: { type: 'STRING', nullable: true },
+          nameDisplay: { type: 'STRING', nullable: true },
           regularPrice: { type: 'STRING', nullable: true },
           regularMultiple: { type: 'STRING', nullable: true },
           promoPrice: { type: 'STRING', nullable: true },
@@ -694,7 +697,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
         // the grade could only rationalise a number already committed.
         propertyOrdering: [
           'tagLocation',
-          'brand', 'name',
+          'brand', 'name', 'brandDisplay', 'nameDisplay',
           'regularPrice', 'regularMultiple', 'promoPrice', 'promoMultiple',
           'loyaltyPrice', 'loyaltyMultiple',
           'unitPrice', 'unitPriceBasis', 'unitPriceText', 'itemSize', 'itemUom',
@@ -996,18 +999,41 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       if (isBlank(value)) return '';
       const raw = String(value).trim();
       const key = raw.toLowerCase().replace(/[\s.]/g, '');
-      // Unknown units fall back to Sentence case, like Ea / Pk / Ct ("BTL" -> "Btl").
-      return UOM_MAP[key] || displayCase(raw);
+      // Unknown units fall back to Title case, like Ea / Pk / Ct ("BTL" -> "Btl").
+      return UOM_MAP[key] || titleCase(raw);
     }
 
-    // Sentence case, always: the first letter capital, every other letter
-    // lower case, whatever the tag prints ("MOSER ROTH" -> "Moser roth",
-    // "Snack Paprika" -> "Snack paprika"). German nouns after the first
-    // word are lowered too - that is the agreed output format.
-    function displayCase(value) {
+    // Small words kept lower case inside a title (never as the first word).
+    const MINOR_WORDS = new Set([
+      // English
+      'a', 'an', 'the', 'and', 'or', 'nor', 'but', 'of', 'in', 'on', 'at',
+      'to', 'for', 'with', 'by', 'from', 'as', 'is', 'are', 'per', 'vs',
+      // German
+      'und', 'oder', 'mit', 'ohne', 'in', 'im', 'an', 'am', 'auf', 'aus',
+      'bei', 'von', 'vom', 'zu', 'zum', 'zur', 'für', 'nach', 'über', 'unter',
+      'der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'einer', 'je'
+    ]);
+
+    // Title case: every word starts with a capital and the rest is lower
+    // case, except the small words above when they are not the first word
+    // ("MOSER ROTH" -> "Moser Roth", "KARTOFFELN MIT SCHALE" -> "Kartoffeln
+    // mit Schale"). A word starts after a space, - / ( & or +.
+    function titleCase(value) {
       if (isBlank(value)) return '';
       const s = String(value).trim().replace(/\s+/g, ' ').toLowerCase();
-      return s.replace(/\p{L}/u, ch => ch.toUpperCase());
+      return s.replace(/(^|[\s\-\/(&+])(\p{L})(\p{L}*)/gu, (m, sep, ch, rest, offset) =>
+        offset > 0 && sep === ' ' && MINOR_WORDS.has(ch + rest) ? m : sep + ch.toUpperCase() + rest);
+    }
+
+    // BRAND and DESCRIPTION casing comes from the model: it returns
+    // brandDisplay / nameDisplay in Proper Case next to the verbatim
+    // brand / name, and knows brand spellings code cannot ("Trader Joe's",
+    // "ja!"). Its text is used as given. When it is missing, or still all
+    // capitals, the verbatim text is title-cased here instead.
+    function displayCase(shown, raw) {
+      const s = isBlank(shown) ? '' : String(shown).trim().replace(/\s+/g, ' ');
+      if (s && s !== s.toUpperCase()) return s;
+      return titleCase(s || raw);
     }
 
     // Brand + name, without doubling a brand the name already starts with
@@ -1941,9 +1967,9 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       row.LOYALTY_PRICE = formatPrice(loyalty);
       row.LOYALTY_MULTIPLE = parseMultiple(label.loyaltyMultiple, loyalty !== null);
 
-      const brand = displayCase(label.brand);
+      const brand = displayCase(label.brandDisplay, label.brand);
       row.BRAND = brand;
-      row.DESCRIPTION = displayCase(buildDescription(brand, displayCase(label.name)));
+      row.DESCRIPTION = buildDescription(brand, displayCase(label.nameDisplay, label.name));
 
       const size = parseQuantity(label.itemSize);
       const uom = normalizeUom(label.itemUom);

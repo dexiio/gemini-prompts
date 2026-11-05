@@ -382,6 +382,7 @@ FIELDS, in the order you will write them:
 1. "brand" - the brand line exactly as printed, usually small capitals above the name ("DULANO", "FERDI FUCHS", "MOSER ROTH"). null if there is none. The store's own name or logo that appears on every label of the store is NOT a brand
    "name" - the product name exactly as printed, in its own language. A name broken over lines is joined with a space ("Mini Würstchen/" + "Salami" -> "Mini Würstchen/Salami"). Never translate it, never put the brand in it
    - A thin VARIANT line under the name ("verschiedene Sorten", "various flavours", "Erdbeere/Kirsche") is NOT part of the name -> extras "variant"
+   "brandDisplay" / "nameDisplay" - the SAME brand and name again, written in Proper Case for display. Every word starts with a capital and the rest is lower case; small words (und, oder, mit, ohne, aus, in, im, auf, von, zum, zur, für, der, die, das, and, of, the, with) stay lower case unless they are the first word; a brand you know is written in its own official spelling ("TRADER JOE'S" -> "Trader Joe's", "MOSER ROTH" -> "Moser Roth", "SCHOKO-FRUCHTAUFSTRICH MIT KIRSCHEN" -> "Schoko-Fruchtaufstrich mit Kirschen"). Same words, same abbreviations, same order as "brand" / "name" - ONLY the capitals change. Never translate, never expand an abbreviation, never add a word. null when "brand" / "name" is null
 
 2. "country" - the ISO 3166-1 alpha-2 code of the market the store is in, judged ONLY from the label: its currency, its language, a market prefix on an organic control code ("DE-ÖKO-006" -> "DE"). It is NOT the product's origin. A language spoken in several markets does not settle it on its own (German alone could be DE, AT, CH or LU). null if the label does not settle it
    "currency" - the currency symbol or code as printed on the label ("€", "£", "zł", "Kč", "Ft", "CHF", "kr", "$"). null when none is printed
@@ -442,7 +443,7 @@ FIELDS, in the order you will write them:
     DEPOSIT is never added to or subtracted from the price: "pfand" (the number alone), "pfand_text" (as printed), "pfand_included" ("true" for "inkl.", "false" for "zzgl.")
 
 EXAMPLE - an electronic label reading "FERDI FUCHS" / "Mini Würstchen/" / "Salami" / "verschiedene Sorten" / "50/100 g Packung", a QR code with "0125957" under it and "4 T" beside it, "1 kg = 33.80 / 16.90", big price 1.69:
-{"brand":"FERDI FUCHS","name":"Mini Würstchen/Salami","country":null,"currency":null,"regularPrice":"1.69","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":null,"unitPriceBasis":null,"unitPriceText":"1 kg = 33.80 / 16.90","itemSize":null,"itemUom":null,"rawPriceStrings":["1.69","1 kg = 33.80 / 16.90"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":"0125957","productIdCheck":"0125957","productId":"0125957","upc":null,"organic":false,"extras":[{"key":"variant","value":"verschiedene Sorten"},{"key":"package","value":"Packung"},{"key":"size_variants","value":"50/100 g"},{"key":"unit_price_text","value":"1 kg = 33.80 / 16.90"},{"key":"tag_code","value":"4 T"},{"key":"has_qr","value":"true"},{"key":"label_type","value":"esl_eink"}]}`;
+{"brand":"FERDI FUCHS","name":"Mini Würstchen/Salami","brandDisplay":"Ferdi Fuchs","nameDisplay":"Mini Würstchen/Salami","country":null,"currency":null,"regularPrice":"1.69","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":null,"unitPriceBasis":null,"unitPriceText":"1 kg = 33.80 / 16.90","itemSize":null,"itemUom":null,"rawPriceStrings":["1.69","1 kg = 33.80 / 16.90"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":"0125957","productIdCheck":"0125957","productId":"0125957","upc":null,"organic":false,"extras":[{"key":"variant","value":"verschiedene Sorten"},{"key":"package","value":"Packung"},{"key":"size_variants","value":"50/100 g"},{"key":"unit_price_text","value":"1 kg = 33.80 / 16.90"},{"key":"tag_code","value":"4 T"},{"key":"has_qr","value":"true"},{"key":"label_type","value":"esl_eink"}]}`;
     }
 
     function buildPackagingSection() {
@@ -464,6 +465,7 @@ CRITICAL RULES
 FIELDS:
 - "brandOnPack" - the brand exactly as printed on the pack, usually the logo ("Ferdi Fuchs", "Dulano"). null if not legible. Not the manufacturer's company name from the address block ("Rügenwalder Mühle Carl Müller GmbH & Co. KG")
 - "nameOnPack" - the product name exactly as printed on the FRONT, with its variant or flavour line when there is one ("Leberwurst" + "Fein" -> "Leberwurst Fein", "Mini Würstchen"). WITHOUT the brand, the size, slogans ("FÜR GROSS UND KLEIN", "Spitzenqualität"), claims or seals. null if not legible
+- "brandOnPackDisplay" / "nameOnPackDisplay" - the SAME brandOnPack and nameOnPack again, written in Proper Case for display, by the same rule as the label's "brandDisplay" / "nameDisplay". null when brandOnPack / nameOnPack is null
 - "netContent" - the net quantity statement exactly as printed ("130 g", "5 Fleischwürste à 20g = 100g", "6 x 0,33 l", "500 g e"). Never from the label
 - "packItemSize" / "packItemUom" - the net quantity of ONE sellable item, taken from netContent, with a dot decimal and the unit alone ("g", "kg", "ml", "l", "cl", "oz", "lb", "Stück"):
    * "130 g" -> "130" and "g"; "0,5 l" -> "0.5" and "l". The "e" mark is not part of it
@@ -534,6 +536,8 @@ No markdown fences, no text outside the object. NEVER guess.`;
       properties: {
         brand: { type: 'STRING', nullable: true },
         name: { type: 'STRING', nullable: true },
+        brandDisplay: { type: 'STRING', nullable: true },
+        nameDisplay: { type: 'STRING', nullable: true },
         country: { type: 'STRING', nullable: true },
         currency: { type: 'STRING', nullable: true },
         regularPrice: { type: 'STRING', nullable: true },
@@ -579,7 +583,7 @@ No markdown fences, no text outside the object. NEVER guess.`;
       // Same reading order as the shelf agents: the large print, the price
       // evidence, the grade - and only then the article number.
       propertyOrdering: [
-        'brand', 'name', 'country', 'currency',
+        'brand', 'name', 'brandDisplay', 'nameDisplay', 'country', 'currency',
         'regularPrice', 'regularMultiple', 'promoPrice', 'promoMultiple',
         'loyaltyPrice', 'loyaltyMultiple',
         'unitPrice', 'unitPriceBasis', 'unitPriceText', 'itemSize', 'itemUom',
@@ -596,6 +600,8 @@ No markdown fences, no text outside the object. NEVER guess.`;
       properties: {
         brandOnPack: { type: 'STRING', nullable: true },
         nameOnPack: { type: 'STRING', nullable: true },
+        brandOnPackDisplay: { type: 'STRING', nullable: true },
+        nameOnPackDisplay: { type: 'STRING', nullable: true },
         netContent: { type: 'STRING', nullable: true },
         packItemSize: { type: 'STRING', nullable: true },
         packItemUom: { type: 'STRING', nullable: true },
@@ -670,7 +676,7 @@ No markdown fences, no text outside the object. NEVER guess.`;
         languageCode: { type: 'STRING', nullable: true }
       },
       propertyOrdering: [
-        'brandOnPack', 'nameOnPack', 'netContent', 'packItemSize', 'packItemUom', 'packCount',
+        'brandOnPack', 'nameOnPack', 'brandOnPackDisplay', 'nameOnPackDisplay', 'netContent', 'packItemSize', 'packItemUom', 'packCount',
         'barcode', 'originOnPack', 'organicCodeOnPack',
         'ingredients', 'nutritionFacts', 'productClaims', 'healthScores', 'languageCode'
       ]
@@ -853,18 +859,41 @@ No markdown fences, no text outside the object. NEVER guess.`;
       if (isBlank(value)) return '';
       const raw = String(value).trim();
       const key = raw.toLowerCase().replace(/[\s.]/g, '');
-      // Unknown units fall back to Sentence case, like Ea / Pk / Ct ("BTL" -> "Btl").
-      return UOM_MAP[key] || displayCase(raw);
+      // Unknown units fall back to Title case, like Ea / Pk / Ct ("BTL" -> "Btl").
+      return UOM_MAP[key] || titleCase(raw);
     }
 
-    // Sentence case, always: the first letter capital, every other letter
-    // lower case, whatever the tag prints ("MOSER ROTH" -> "Moser roth",
-    // "Snack Paprika" -> "Snack paprika"). German nouns after the first
-    // word are lowered too - that is the agreed output format.
-    function displayCase(value) {
+    // Small words kept lower case inside a title (never as the first word).
+    const MINOR_WORDS = new Set([
+      // English
+      'a', 'an', 'the', 'and', 'or', 'nor', 'but', 'of', 'in', 'on', 'at',
+      'to', 'for', 'with', 'by', 'from', 'as', 'is', 'are', 'per', 'vs',
+      // German
+      'und', 'oder', 'mit', 'ohne', 'in', 'im', 'an', 'am', 'auf', 'aus',
+      'bei', 'von', 'vom', 'zu', 'zum', 'zur', 'für', 'nach', 'über', 'unter',
+      'der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'einer', 'je'
+    ]);
+
+    // Title case: every word starts with a capital and the rest is lower
+    // case, except the small words above when they are not the first word
+    // ("MOSER ROTH" -> "Moser Roth", "KARTOFFELN MIT SCHALE" -> "Kartoffeln
+    // mit Schale"). A word starts after a space, - / ( & or +.
+    function titleCase(value) {
       if (isBlank(value)) return '';
       const s = String(value).trim().replace(/\s+/g, ' ').toLowerCase();
-      return s.replace(/\p{L}/u, ch => ch.toUpperCase());
+      return s.replace(/(^|[\s\-\/(&+])(\p{L})(\p{L}*)/gu, (m, sep, ch, rest, offset) =>
+        offset > 0 && sep === ' ' && MINOR_WORDS.has(ch + rest) ? m : sep + ch.toUpperCase() + rest);
+    }
+
+    // BRAND and DESCRIPTION casing comes from the model: it returns
+    // brandDisplay / nameDisplay in Proper Case next to the verbatim
+    // brand / name, and knows brand spellings code cannot ("Trader Joe's",
+    // "ja!"). Its text is used as given. When it is missing, or still all
+    // capitals, the verbatim text is title-cased here instead.
+    function displayCase(shown, raw) {
+      const s = isBlank(shown) ? '' : String(shown).trim().replace(/\s+/g, ' ');
+      if (s && s !== s.toUpperCase()) return s;
+      return titleCase(s || raw);
     }
 
     // Brand + name, without doubling a brand the name already starts with
@@ -1678,10 +1707,14 @@ No markdown fences, no text outside the object. NEVER guess.`;
       // Brand and name: the pack first, the label otherwise. Taken field by
       // field, so a pack whose brand is legible but whose name is not still
       // gives its brand.
-      const brand = displayCase(!isBlank(pkg.brandOnPack) ? pkg.brandOnPack : label.brand);
-      const name = displayCase(!isBlank(pkg.nameOnPack) ? pkg.nameOnPack : label.name);
+      const brand = !isBlank(pkg.brandOnPack)
+        ? displayCase(pkg.brandOnPackDisplay, pkg.brandOnPack)
+        : displayCase(label.brandDisplay, label.brand);
+      const name = !isBlank(pkg.nameOnPack)
+        ? displayCase(pkg.nameOnPackDisplay, pkg.nameOnPack)
+        : displayCase(label.nameDisplay, label.name);
       row.BRAND = brand;
-      row.DESCRIPTION = displayCase(buildDescription(brand, name));
+      row.DESCRIPTION = buildDescription(brand, name);
 
       // Size: the pack first, the label otherwise.
       const fromPack = packSizeOf(pkg);
