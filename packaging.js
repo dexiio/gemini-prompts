@@ -26,7 +26,11 @@
  *
  * WHICH SOURCE WINS
  *   BRAND, DESCRIPTION and the size (ITEM_SIZE, ITEM_UOFM, PACK_SIZE):
- *     the PACKAGING when it shows them, the label otherwise.
+ *     the PACKAGING when it shows them, the label otherwise. Two
+ *     exceptions: a label covering several varieties ("verschiedene
+ *     Sorten") gives BRAND and DESCRIPTION, and a label selling as ONE
+ *     item the total a pack split into pieces (5 x 65 g vs 325 g) gives
+ *     the size.
  *   Prices, unit price, SKU, UPC: the LABEL only. UPC follows the spec -
  *     the label's own barcode or a produce PLU. A barcode read off the
  *     pack goes to RAW_DATA_JSON.package_barcode, never to UPC.
@@ -95,6 +99,10 @@
       UNIT_PRICE_TOLERANCE_PCT: 0.02,
       UNIT_PRICE_MISMATCH_FLAG: 'Check',
 
+      // The same, when the unit price cannot be verified at all (no size,
+      // units that do not compare). '' = keep "Clean" and only log it.
+      UNIT_PRICE_AMBIGUOUS_FLAG: 'Check',
+
       // Label size vs pack size: past this gap they disagree and the row
       // is flagged (the pack's size is still the one written).
       SIZE_MISMATCH_TOLERANCE_PCT: 0.02,
@@ -151,6 +159,7 @@
       ml: 'ml', cl: 'cl', dl: 'dl',
       l: 'l', lt: 'l', ltr: 'l', liter: 'l', litre: 'l', litro: 'l', litri: 'l',
       oz: 'oz', floz: 'fl oz', lb: 'lb', lbs: 'lb',
+      qt: 'qt', quart: 'qt', pt: 'pt', pint: 'pt', gal: 'gal', gallon: 'gal',
       st: 'Ea', stk: 'Ea', 'stück': 'Ea', stueck: 'Ea', each: 'Ea', ea: 'Ea',
       pc: 'Ea', pcs: 'Ea', piece: 'Ea', pieces: 'Ea', stuks: 'Ea', stuk: 'Ea',
       szt: 'Ea', db: 'Ea', kos: 'Ea', pz: 'Ea', pezzi: 'Ea', 'unité': 'Ea', unites: 'Ea',
@@ -165,8 +174,17 @@
       oz: ['mass', 28.349523], lb: ['mass', 453.59237],
       ml: ['volume', 1], cl: ['volume', 10], dl: ['volume', 100], l: ['volume', 1000],
       'fl oz': ['volume', 29.573530],
-      Ea: ['count', 1]
+      pt: ['volume', 473.176473], qt: ['volume', 946.352946], gal: ['volume', 3785.411784],
+      Ea: ['count', 1], Ct: ['count', 1]
     };
+
+    // Ounces by weight and by volume, compared 1:1 by the unit-price
+    // check only (see checkUnitPrice).
+    const OUNCES = new Set(['oz', 'fl oz']);
+
+    // Units where a 3-digit decimal part is normal and a thousands
+    // separator is not ("1,395 kg"). See parseQuantity.
+    const LARGE_UNITS = new Set(['kg', 'l', 'lb']);
 
     // -----------------------------------------------------------------
     // Input helpers
@@ -798,9 +816,10 @@ No markdown fences, no text outside the object. NEVER guess.`;
     // A printed number -> a Number, with no cents conversion. A single
     // separator followed by 1-2 digits is the decimal point; followed by 3
     // it is a thousands separator ("2.038"), except after a bare 0
-    // ("0,672"), which can only be a decimal. "7.-" and "1.299,-" are whole
-    // units, so any separator left in them is thousands.
-    function parseAmount(value) {
+    // ("0,672"), which can only be a decimal, or when the caller says the
+    // unit is a large one (see parseQuantity). "7.-" and "1.299,-" are
+    // whole units, so any separator left in them is thousands.
+    function parseAmount(value, threeDecimals) {
       if (isBlank(value)) return null;
       let s = String(value).trim();
       s = s.replace(/^[-–—]\s*(?=[.,]\d)/, '0');
@@ -812,7 +831,7 @@ No markdown fences, no text outside the object. NEVER guess.`;
       const sep = Math.max(s.lastIndexOf('.'), s.lastIndexOf(','));
       const decimals = sep === -1 ? 0 : s.length - sep - 1;
       const intPart = sep === -1 ? s : s.slice(0, sep).replace(/[.,]/g, '');
-      if (!wholeUnits && sep !== -1 && (decimals === 1 || decimals === 2 || (decimals === 3 && /^0*$/.test(intPart)))) {
+      if (!wholeUnits && sep !== -1 && (decimals === 1 || decimals === 2 || (decimals === 3 && (threeDecimals || /^0*$/.test(intPart))))) {
         s = intPart + '.' + s.slice(sep + 1);
       } else {
         s = s.replace(/[.,]/g, '');
@@ -840,12 +859,17 @@ No markdown fences, no text outside the object. NEVER guess.`;
 
     // "1.000" is a thousand, "0,75" three quarters, and in "2 x 200" the
     // component (200) is the size - the count belongs to the pack.
-    function parseQuantity(value) {
+    // In a LARGE unit (kg, l, lb) three digits after the separator are
+    // decimals: a weighed pack's "1,395 kg" is 1.395 kg, never 1395 kg,
+    // while "1.000 g" stays a thousand grams. The unit is `uom`, or else
+    // the word printed after the number ("2,800 kg").
+    function parseQuantity(value, uom) {
       if (isBlank(value)) return null;
       let s = String(value).trim();
       const pack = s.match(/^\d+\s*[x×*]\s*(\d.*)$/i);
       if (pack) s = pack[1];
-      const n = parseAmount(s);
+      const unit = isBlank(uom) ? (s.match(/\d\s*([a-z]+)\.?(?:\s|$)/i) || [])[1] : uom;
+      const n = parseAmount(s, LARGE_UNITS.has(normalizeUom(unit)));
       return n !== null && n > 0 ? n : null;
     }
 
@@ -1038,18 +1062,33 @@ No markdown fences, no text outside the object. NEVER guess.`;
     // every tag in the reference photos (1.59 / 100 g = 15.90/kg, promo
     // tags included), so a mismatch almost always means one of the
     // numbers was misread.
-    // Returns 'ok', 'mismatch', or '' when the units cannot be compared.
+    // EVERY unit price gets a result - there is no "not checked":
+    //   'valid'        - a price / size reproduces the printed unit price
+    //   'inconsistent' - the comparison ran and nothing reproduces it
+    //   'ambiguous'    - the comparison cannot run; `reason` says why
+    //                    (no_size, no_price, no_basis, unit_price_unreadable,
+    //                    unknown_unit, units_not_comparable)
+    // Returns { result, reason }.
     // packCount is the n of a printed "n x m" multipack. itemSize holds the
     // COMPONENT, but the price and the unit price are for the whole pack,
     // so either reading is accepted.
     function checkUnitPrice(prices, size, uom, unitPrice, basis, packCount) {
-      if (unitPrice === null || size === null || !basis || prices.length === 0) return '';
-      const basisMatch = String(basis).trim().match(/^(\d+(?:[.,]\d+)?)?\s*(.+)$/);
-      if (!basisMatch) return '';
-      const basisQty = basisMatch[1] ? parseQuantity(basisMatch[1]) : 1;
-      const itemUnit = UOM_FACTOR[uom];
-      const basisUnit = UOM_FACTOR[normalizeUom(basisMatch[2])];
-      if (!itemUnit || !basisUnit || itemUnit[0] !== basisUnit[0]) return '';
+      const ambiguous = reason => ({ result: 'ambiguous', reason });
+      if (unitPrice === null) return ambiguous('unit_price_unreadable');
+      if (prices.length === 0) return ambiguous('no_price');
+      if (size === null) return ambiguous('no_size');
+      const basisMatch = String(isBlank(basis) ? '' : basis).trim().match(/^(\d+(?:[.,]\d+)?)?\s*(.+)$/);
+      if (!basisMatch) return ambiguous('no_basis');
+      const basisQty = basisMatch[1] ? parseQuantity(basisMatch[1], basisMatch[2]) : 1;
+      if (basisQty === null) return ambiguous('no_basis');
+      const basisUom = normalizeUom(basisMatch[2]);
+      let itemUnit = UOM_FACTOR[uom];
+      let basisUnit = UOM_FACTOR[basisUom];
+      if (!itemUnit || !basisUnit) return ambiguous('unknown_unit');
+      // US tags price a liquid "per oz" against a size in "fl oz" (and the
+      // reverse): compared ounce for ounce, the way the tag computed it.
+      if (OUNCES.has(uom) && OUNCES.has(basisUom)) itemUnit = basisUnit = ['ounce', 1];
+      if (itemUnit[0] !== basisUnit[0]) return ambiguous('units_not_comparable');
 
       const tolerance = Math.max(CONFIG.UNIT_PRICE_TOLERANCE_ABS, unitPrice * CONFIG.UNIT_PRICE_TOLERANCE_PCT);
       const sizes = packCount > 1 ? [size, size * packCount] : [size];
@@ -1057,7 +1096,7 @@ No markdown fences, no text outside the object. NEVER guess.`;
         const expected = (p.price / p.multiple) / (s * itemUnit[1]) * (basisQty * basisUnit[1]);
         return Math.abs(expected - unitPrice) <= tolerance;
       }));
-      return matches ? 'ok' : 'mismatch';
+      return { result: matches ? 'valid' : 'inconsistent', reason: '' };
     }
 
     // The items in a package, from the "pack_printed" extra: "6x120 ml",
@@ -1502,9 +1541,10 @@ No markdown fences, no text outside the object. NEVER guess.`;
           printed: unitInfo.printed || formatPrice(unitInfo.amount),
           per: String(label.unitPriceBasis || '').trim()
         };
-        // Always one of three: ok, mismatch, or not_checkable when the
-        // size, basis or units do not allow the comparison.
-        raw.unit_price.check = unitCheck || 'not_checkable';
+        // Always one of three: valid, inconsistent, or ambiguous with the
+        // reason the comparison could not run (see checkUnitPrice).
+        raw.unit_price.check = unitCheck ? unitCheck.result : 'ambiguous';
+        if (unitCheck && unitCheck.reason) raw.unit_price.check_reason = unitCheck.reason;
       }
 
       const priceStrings = buildPriceStrings(label.rawPriceStrings);
@@ -1654,7 +1694,7 @@ No markdown fences, no text outside the object. NEVER guess.`;
     // The pack's size, when it prints one the code can use.
     function packSizeOf(pkg) {
       if (!pkg) return null;
-      const size = parseQuantity(pkg.packItemSize);
+      const size = parseQuantity(pkg.packItemSize, pkg.packItemUom);
       const uom = normalizeUom(pkg.packItemUom);
       if (size === null || !uom) return null;
       const count = Math.round(parseQuantity(pkg.packCount) || 1);
@@ -1662,7 +1702,7 @@ No markdown fences, no text outside the object. NEVER guess.`;
     }
 
     function labelSizeOf(label) {
-      const size = parseQuantity(label.itemSize);
+      const size = parseQuantity(label.itemSize, label.itemUom);
       if (size === null) return null;
       return { size, uom: normalizeUom(label.itemUom), count: packCountOf(label), source: 'label' };
     }
@@ -1677,6 +1717,32 @@ No markdown fences, no text outside the object. NEVER guess.`;
       const totalA = a.size * fa[1] * a.count;
       const totalB = b.size * fb[1] * b.count;
       return Math.abs(totalA - totalB) > Math.max(totalA, totalB) * CONFIG.SIZE_MISMATCH_TOLERANCE_PCT;
+    }
+
+    // The model sometimes counts pieces sealed together as separate units
+    // ("5 Stück" in one bag -> 5 x 65 g), which the prompt forbids. When the
+    // label sells the same total as ONE item ("325 g Packung"), the label
+    // settles it: one item of 325 g. A label that prints the multipack
+    // itself ("2x375 g") has a count above 1 and is left alone.
+    function sealedPiecesAsOne(fromPack, fromLabel) {
+      if (!fromPack || !fromLabel || fromPack.count <= 1 || fromLabel.count !== 1) return fromPack;
+      const fp = UOM_FACTOR[fromPack.uom];
+      const fl = UOM_FACTOR[fromLabel.uom];
+      if (!fp || !fl || fp[0] !== fl[0] || sizesDisagree(fromPack, fromLabel)) return fromPack;
+      console.log(`Pack read as ${fromPack.count} x ${fromPack.size} ${fromPack.uom}, label sells ${fromLabel.size} ${fromLabel.uom} as one item - keeping 1 x ${fromLabel.size} ${fromLabel.uom}`);
+      return { size: fromLabel.size, uom: fromLabel.uom, count: 1, source: 'label' };
+    }
+
+    // A label for several varieties at one price ("verschiedene Sorten",
+    // "Leberwurst/Mettwurst", "50/100 g") names the whole range, and the
+    // pack in the photo is only one of them. On such a label BRAND and
+    // DESCRIPTION come from the label, so the row is not narrowed to the
+    // variety that happened to be photographed.
+    function labelCoversVarieties(label) {
+      const extras = Array.isArray(label.extras) ? label.extras : [];
+      const listed = extras.some(extra => extra && !isBlank(extra.value) &&
+        ['variant', 'size_variants'].indexOf(String(extra.key || '').toLowerCase()) !== -1);
+      return listed || /\p{L}\s*\/\s*\p{L}/u.test(String(label.name || ''));
     }
 
     // label and pkg are the model's objects ({} when absent); packaging is
@@ -1706,19 +1772,21 @@ No markdown fences, no text outside the object. NEVER guess.`;
 
       // Brand and name: the pack first, the label otherwise. Taken field by
       // field, so a pack whose brand is legible but whose name is not still
-      // gives its brand.
-      const brand = !isBlank(pkg.brandOnPack)
-        ? displayCase(pkg.brandOnPackDisplay, pkg.brandOnPack)
-        : displayCase(label.brandDisplay, label.brand);
-      const name = !isBlank(pkg.nameOnPack)
+      // gives its brand. A label covering several varieties reverses the
+      // order (see labelCoversVarieties).
+      const range = !isBlank(label.name) && labelCoversVarieties(label);
+      const packBrand = isBlank(pkg.brandOnPack) ? '' : displayCase(pkg.brandOnPackDisplay, pkg.brandOnPack);
+      const labelBrand = displayCase(label.brandDisplay, label.brand);
+      const brand = range ? (labelBrand || packBrand) : (packBrand || labelBrand);
+      const name = !range && !isBlank(pkg.nameOnPack)
         ? displayCase(pkg.nameOnPackDisplay, pkg.nameOnPack)
         : displayCase(label.nameDisplay, label.name);
       row.BRAND = brand;
       row.DESCRIPTION = buildDescription(brand, name);
 
       // Size: the pack first, the label otherwise.
-      const fromPack = packSizeOf(pkg);
       const fromLabel = labelSizeOf(label);
+      const fromPack = sealedPiecesAsOne(packSizeOf(pkg), fromLabel);
       const chosen = fromPack || fromLabel;
       if (chosen) {
         row.ITEM_SIZE = String(chosen.size);
@@ -1749,12 +1817,17 @@ No markdown fences, no text outside the object. NEVER guess.`;
       if (regular !== null) prices.push({ price: regular, multiple: Number(row.REG_MULTIPLE) });
       if (promo !== null) prices.push({ price: promo, multiple: Number(row.PROMO_MULTIPLE) });
       if (loyalty !== null) prices.push({ price: loyalty, multiple: Number(row.LOYALTY_MULTIPLE) });
-      const unitCheck = chosen
-        ? checkUnitPrice(prices, chosen.size, chosen.uom, unitPrice, label.unitPriceBasis, chosen.count)
-        : '';
-      if (unitCheck === 'mismatch') {
+      const unitCheck = unitInfo
+        ? checkUnitPrice(prices, chosen ? chosen.size : null, chosen ? chosen.uom : '', unitPrice, label.unitPriceBasis, chosen ? chosen.count : 1)
+        : null;
+      if (unitCheck && unitCheck.result === 'inconsistent') {
         console.warn(`Unit price ${label.unitPrice}/${label.unitPriceBasis} does not match ${label.regularPrice || label.promoPrice || label.loyaltyPrice} for ${row.ITEM_SIZE_UOFM} - "${row.DESCRIPTION}"`);
         if (CONFIG.UNIT_PRICE_MISMATCH_FLAG) row.clean = CONFIG.UNIT_PRICE_MISMATCH_FLAG;
+      } else if (unitCheck && unitCheck.result === 'ambiguous') {
+        // The unit price could not be verified. Nothing is blanked, but a
+        // reviewer looks at it before it is trusted.
+        console.log(`Unit price ${label.unitPrice}/${label.unitPriceBasis} not verifiable (${unitCheck.reason}) - "${row.DESCRIPTION}"`);
+        if (CONFIG.UNIT_PRICE_AMBIGUOUS_FLAG) row.clean = CONFIG.UNIT_PRICE_AMBIGUOUS_FLAG;
       }
 
       row.RAW_DATA_JSON = buildRawJson(label, unitInfo, unitCheck, upc.type, packaging,
