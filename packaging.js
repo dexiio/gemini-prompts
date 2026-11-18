@@ -370,6 +370,7 @@ Decide for EVERY image what it shows, and write it in "images" as {"image": n, "
 - "packaging" - the product itself, usually held in a hand or photographed close up: its front, back, side or bottom panels
 - "other" - neither: blurred, a different product, a shelf with no readable label
 Some products have no label image and some have no packaging image. That is normal: the missing section is null.
+For a "label" or "packaging" image also write "box2d": the outline of the label, or of the product, in that image as [ymin, xmin, ymax, xmax], each a whole number from 0 to 1000 relative to the image height and width. Everything you read from that image comes from inside it. null for "other", or if you cannot outline it
 
 READ ONLY THE PRODUCT THE PHOTOS ARE ABOUT
 The photos are taken in a store, so OTHER labels and OTHER products are visible around the edges and in the background.
@@ -539,9 +540,12 @@ No markdown fences, no text outside the object. NEVER guess.`;
         type: 'OBJECT',
         properties: {
           image: { type: 'INTEGER', nullable: true },
-          kind: { type: 'STRING', nullable: true }
+          kind: { type: 'STRING', nullable: true },
+          // Where the label / the product is in that photo - kept in
+          // RAW_DATA_JSON.regions.
+          box2d: { type: 'ARRAY', nullable: true, items: { type: 'INTEGER' } }
         },
-        propertyOrdering: ['image', 'kind']
+        propertyOrdering: ['image', 'kind', 'box2d']
       }
     };
 
@@ -1117,6 +1121,18 @@ No markdown fences, no text outside the object. NEVER guess.`;
     // Packaging: normalization
     // -----------------------------------------------------------------
 
+    // A region of the photo as Gemini returns it: [ymin, xmin, ymax, xmax],
+    // each 0-1000 relative to the image height and width (multiply by the
+    // image size for pixels). Approximate - good enough to point a reviewer
+    // at the right tag, not pixel-precise. Anything malformed -> null.
+    function normalizeBox(value) {
+      if (!Array.isArray(value) || value.length !== 4) return null;
+      const box = value.map(Number);
+      if (!box.every(n => isFinite(n) && n >= 0 && n <= 1000)) return null;
+      const [ymin, xmin, ymax, xmax] = box.map(Math.round);
+      return ymin < ymax && xmin < xmax ? [ymin, xmin, ymax, xmax] : null;
+    }
+
     function cleanText(value, maxChars) {
       if (isBlank(value)) return null;
       const s = String(value).replace(/\s+/g, ' ').trim();
@@ -1524,8 +1540,9 @@ No markdown fences, no text outside the object. NEVER guess.`;
       return fromTag || fromPack;
     }
 
-    function buildRawJson(label, unitInfo, unitCheck, upcType, packaging, pluRaw) {
+    function buildRawJson(label, unitInfo, unitCheck, upcType, packaging, pluRaw, regions) {
       const raw = {};
+      if (regions && regions.length) raw.regions = regions;
       // Where on the fixture this row came from - the reviewer's way back to
       // the tag in the photo, and what the duplicate check keys on.
       const location = cleanText(label.tagLocation, CONFIG.RAW_MAX_VALUE_CHARS);
@@ -1664,6 +1681,22 @@ No markdown fences, no text outside the object. NEVER guess.`;
     // -----------------------------------------------------------------
 
     const IMAGE_KINDS = ['label', 'packaging', 'other'];
+
+    // The outline of the label / the product in each photo it was read
+    // from: [{ image (1-based), kind, box_2d }]. Only photos that kept
+    // their kind after readImageKinds.
+    function readRegions(images, kinds) {
+      const regions = [];
+      (Array.isArray(images) ? images : []).forEach(entry => {
+        if (!entry || typeof entry !== 'object') return;
+        const index = Number(entry.image) - 1;
+        const kind = kinds[index];
+        if (kind !== 'label' && kind !== 'packaging') return;
+        const box = normalizeBox(entry.box2d);
+        if (box && !regions.some(r => r.image === index + 1)) regions.push({ image: index + 1, kind, box_2d: box });
+      });
+      return regions.sort((a, b) => a.image - b.image);
+    }
 
     // One kind per photo, in input order. A photo the model did not name
     // is "other". At most one label: a second one is demoted, because two
@@ -1831,7 +1864,7 @@ No markdown fences, no text outside the object. NEVER guess.`;
       }
 
       row.RAW_DATA_JSON = buildRawJson(label, unitInfo, unitCheck, upc.type, packaging,
-        upc.raw && upc.raw !== row.UPC ? upc.raw : '');
+        upc.raw && upc.raw !== row.UPC ? upc.raw : '', ctx.regions);
 
       return row;
     }
@@ -1920,7 +1953,7 @@ No markdown fences, no text outside the object. NEVER guess.`;
     const labelIndex = kinds.indexOf('label');
     const packIndex = kinds.indexOf('packaging');
     const imageUrl = links[labelIndex !== -1 ? labelIndex : (packIndex !== -1 ? packIndex : 0)];
-    const ctx = { imagesInput, imageUrl, lastSeen, pinnedCountry };
+    const ctx = { imagesInput, imageUrl, lastSeen, pinnedCountry, regions: readRegions(extraction.images, kinds) };
 
     const row = buildRow(label || {}, pkg || {}, packaging, ctx, usage);
 
