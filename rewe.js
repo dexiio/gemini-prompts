@@ -418,6 +418,7 @@ FIELDS, in the order you will write them:
 3. PRICES - the cents are printed smaller and raised: a big "6" with a small "49" is "6.49". Read every digit left to right - do not drop the first one. Return a dot decimal with no symbol: "6,49" -> "6.49". "-.99" is "0.99", "7.-" and "7,-" are "7.00"
    - ONE price -> "regularPrice"
    - "AKTION" (the magenta or red label, or the red AKTION header) with ONE price and no old price -> "promoPrice", regularPrice null
+   - NO PRICE, only a note that the pack carries it ("Preis siehe Packung", "Preis s. Etikett") -> every price field null, plus extras "price_on_pack" as printed and "variable_weight" = "true". Still read the unit price ("1 kg = 4.99")
    - A STRUCK-THROUGH old price beside the current one -> the old price is "regularPrice" and the big current price is "promoPrice"
    - "TIEFPREIS", "Bio", "Regional" and "NEU" are NOT discounts: the price stays "regularPrice"
    - LOYALTY is a price the tag GATES behind something the shopper must present. At REWE that is REWE BONUS: a price marked "mit REWE Bonus", "Bonus-Preis" or shown beside the REWE app logo -> "loyaltyPrice". The price for everyone else on the same tag is "regularPrice", or "promoPrice" if it is itself discounted. Bonus CREDIT ("2 € Bonus-Guthaben", "10 Prozent Bonus") is NOT a price - put the text in extras "loyalty_text". No printed gate means not loyalty
@@ -438,6 +439,7 @@ FIELDS, in the order you will write them:
    - A MULTIPACK ("6x0,5-Liter-Flaschen", "4 x 125 g") -> the COMPONENT is the size: "0.5" and "l", plus extras "pack_printed" as printed. When a total is also printed, add extras "total_size_printed"
    - A PACK COUNT with no component size ("6er Pack", "6-Pack", "2ER PACK") -> extras "pack_printed" as printed. The count is never "itemSize"; a net quantity printed beside it is still the size
    - SEVERAL ALTERNATIVE SIZES ("225/250 g") -> both null, plus extras "size_variants"
+   - AN APPROXIMATE WEIGHT ("ca. 2,3 kg Packung") -> both null, plus extras "example_weight" as printed and "variable_weight" = "true"
    - Never take a size from the packaging
 
 6. "rawPriceStrings" - the PRICE tokens on this tag, copied exactly as printed and untidied: ["6.49", "1 kg = 28.84 €"]. Keep the comma, the symbol and the "1 kg =" prefix
@@ -477,7 +479,7 @@ FIELDS, in the order you will write them:
 10. "organic" - true when the label carries the green "Bio" header card, its brand or name says "Bio" ("EINFACH BIO", "REWE Bio"), or it prints an organic control code ("DE-ÖKO-006")
 
 11. "extras" - anything else printed on THIS tag, as {"key","value"}, values exactly as printed:
-    "name_line", "variety", "origin", "grade", "organic_code" (the control code as printed, "DE-ÖKO-006"), "declaration_note", "package", "size_note", "pack_printed", "total_size_printed", "size_variants", "unit_price_text", "promo_badge", "price_badge", "loyalty_text", "tag_code", "header_line", "has_qr" as above, and "regional" ("true" for the yellow Regional card), "vegan" ("yes" for the V-label or "VEGAN"), "test_rating" ("ÖKO-TEST sehr gut"), "promo_valid_text" (a validity window: "gültig bis 04.11."), "label_type" ("esl_small" for label A, "esl_large" for label B, "paper" for label C, "handwritten")
+    "price_on_pack", "example_weight", "variable_weight" (see the prices and the size), "name_line", "variety", "origin", "grade", "organic_code" (the control code as printed, "DE-ÖKO-006"), "declaration_note", "package", "size_note", "pack_printed", "total_size_printed", "size_variants", "unit_price_text", "promo_badge", "price_badge", "loyalty_text", "tag_code", "header_line", "has_qr" as above, and "regional" ("true" for the yellow Regional card), "vegan" ("yes" for the V-label or "VEGAN"), "test_rating" ("ÖKO-TEST sehr gut"), "promo_valid_text" (a validity window: "gültig bis 04.11."), "label_type" ("esl_small" for label A, "esl_large" for label B, "paper" for label C, "handwritten")
     PFAND is never added to or subtracted from the price: "pfand" (the number alone), "pfand_text" (as printed), "pfand_included" ("true" for "inkl.", "false" for "zzgl."), "pfand_type" ("EINWEG" / "MEHRWEG")
 
 BEFORE YOU ANSWER
@@ -1268,6 +1270,63 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
     }
 
     // -----------------------------------------------------------------
+    // Size rules (CM-2099, agreed with Brett 2026-11)
+    //   - the shelf label is the source of the size
+    //   - sold by weight: 1 kg at the label's unit price
+    //   - "18x2er Packung": 2 Ct x 18
+    // -----------------------------------------------------------------
+
+    // The value of one extra ("pack_printed", "size_variants"), '' when absent.
+    function extraOf(label, key) {
+      const extras = Array.isArray(label && label.extras) ? label.extras : [];
+      const hit = extras.find(extra => extra && String(extra.key || '').trim().toLowerCase() === key && !isBlank(extra.value));
+      return hit ? String(hit.value).trim() : '';
+    }
+
+    // A unit-price basis ("1 kg", "kg", "100 g") as { size, uom }, or null.
+    function parseBasis(basis) {
+      const m = String(isBlank(basis) ? '' : basis).trim().match(/^(\d+(?:[.,]\d+)?)?\s*(.+)$/);
+      if (!m) return null;
+      const uom = normalizeUom(m[2]);
+      const size = m[1] ? parseQuantity(m[1], m[2]) : 1;
+      if (size === null || !(size > 0) || !UOM_FACTOR[uom]) return null;
+      return { size, uom };
+    }
+
+    // SOLD BY WEIGHT: the price depends on the weight of each pack ("Preis
+    // siehe Packung", "ca. 2,3 kg Packung", "z.B. 500 g für 3.29"). The
+    // row is 1 kg (1 l; 1 lb on a US tag) at the label's unit price,
+    // never the weight of the one pack photographed, which differs from
+    // pack to pack. Returns { size: 1, uom, price } or null.
+    function variableWeightOf(label) {
+      if (!label) return null;
+      const flagged = /^(true|yes|1)$/i.test(extraOf(label, 'variable_weight')) ||
+        !!extraOf(label, 'example_weight') || !!extraOf(label, 'price_on_pack');
+      if (!flagged) return null;
+      const info = readUnitPrice(label);
+      const unitPrice = info && info.effective !== undefined ? info.effective : parsePrice(label.unitPrice);
+      const basis = parseBasis(label.unitPriceBasis);
+      if (unitPrice === null || !basis) return null;
+      const family = UOM_FACTOR[basis.uom][0];
+      if (family !== 'mass' && family !== 'volume') return null;
+      const imperial = ['oz', 'lb', 'fl oz', 'pt', 'qt', 'gal'].indexOf(basis.uom) !== -1;
+      const uom = family === 'mass' ? (imperial ? 'lb' : 'kg') : (imperial ? basis.uom : 'l');
+      const price = unitPrice * UOM_FACTOR[uom][1] / (basis.size * UOM_FACTOR[basis.uom][1]);
+      return { size: 1, uom, price: Number(price.toFixed(2)) };
+    }
+
+    // A count-only multipack ("18x2er Packung": 18 packs of 2) as
+    // { size: 2, uom: 'Ct', count: 18 }, or null. Used only when the label
+    // prints no net quantity.
+    function countOnlyOf(label) {
+      const m = extraOf(label, 'pack_printed').match(/(\d+)\s*[x×*]\s*(\d+)\s*-?\s*er\b/i);
+      if (!m) return null;
+      const count = Number(m[1]);
+      const size = Number(m[2]);
+      return count >= 1 && size >= 1 ? { size, uom: 'Ct', count } : null;
+    }
+
+    // -----------------------------------------------------------------
     // Packaging: normalization and binding
     //
     // Everything below touches ONLY the packages array. It never reads a
@@ -1959,7 +2018,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
 
     function hasPrice(label) {
       return !!label && (parsePrice(label.regularPrice) !== null || parsePrice(label.promoPrice) !== null ||
-        parsePrice(label.loyaltyPrice) !== null);
+        parsePrice(label.loyaltyPrice) !== null || variableWeightOf(label) !== null);
     }
 
     function baseRow(imagesInput, imageUrl, lastSeen, country, currency, usage, multiple, clean) {
@@ -2011,13 +2070,18 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       const row = baseRow(ctx.imagesInput, ctx.imageUrl, ctx.lastSeen, country,
         resolveCurrency(label.currency, country), usage, multiple, 'Clean');
 
-      const regular = parsePrice(label.regularPrice);
-      const promo = parsePrice(label.promoPrice);
+      // Sold by weight: 1 kg at the unit price (see variableWeightOf). A
+      // pack price on such a tag is for one pack's weight, so it is not
+      // written; raw_price_strings still has it.
+      const byWeight = variableWeightOf(label);
+      if (byWeight) console.log(`Sold by weight - 1 ${byWeight.uom} at ${byWeight.price} - "${label.name || 'unnamed tag'}"`);
+      const regular = byWeight ? byWeight.price : parsePrice(label.regularPrice);
+      const promo = byWeight ? null : parsePrice(label.promoPrice);
       row.REG_PRICE = formatPrice(regular);
-      row.REG_MULTIPLE = parseMultiple(label.regularMultiple, regular !== null);
+      row.REG_MULTIPLE = parseMultiple(byWeight ? '1' : label.regularMultiple, regular !== null);
       row.PROMO_PRICE = formatPrice(promo);
       row.PROMO_MULTIPLE = parseMultiple(label.promoMultiple, promo !== null);
-      const loyalty = parsePrice(label.loyaltyPrice);
+      const loyalty = byWeight ? null : parsePrice(label.loyaltyPrice);
       row.LOYALTY_PRICE = formatPrice(loyalty);
       row.LOYALTY_MULTIPLE = parseMultiple(label.loyaltyMultiple, loyalty !== null);
 
@@ -2025,14 +2089,17 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       row.BRAND = brand;
       row.DESCRIPTION = buildDescription(brand, displayCase(label.nameDisplay, label.name));
 
-      const size = parseQuantity(label.itemSize, label.itemUom);
-      const uom = normalizeUom(label.itemUom);
+      // The tag's own size; else a count-only pack ("18x2er" -> 2 Ct x 18).
+      const printedSize = parseQuantity(label.itemSize, label.itemUom);
+      const countOnly = printedSize === null ? countOnlyOf(label) : null;
+      const size = byWeight ? byWeight.size : (printedSize !== null ? printedSize : (countOnly ? countOnly.size : null));
+      const uom = byWeight ? byWeight.uom : (printedSize !== null ? normalizeUom(label.itemUom) : (countOnly ? countOnly.uom : ''));
       row.ITEM_SIZE = size === null ? '' : String(size);
       row.ITEM_UOFM = size === null ? '' : uom;
       row.ITEM_SIZE_UOFM = size === null ? '' : (uom ? `${size} ${uom}` : String(size));
       // Items per package: the count printed for a multipack, else 1 -
       // never empty, downstream needs the default.
-      const packCount = packCountOf(label);
+      const packCount = byWeight ? 1 : (countOnly ? countOnly.count : packCountOf(label));
       row.PACK_SIZE = String(packCount);
 
       // A PLU the model filed as the article number is moved to UPC, and a

@@ -25,12 +25,19 @@
  *   generic 4-8 digit length.
  *
  * WHICH SOURCE WINS
- *   BRAND, DESCRIPTION and the size (ITEM_SIZE, ITEM_UOFM, PACK_SIZE):
- *     the PACKAGING when it shows them, the label otherwise. Two
- *     exceptions: a label covering several varieties ("verschiedene
- *     Sorten") gives BRAND and DESCRIPTION, and a label selling as ONE
- *     item the total a pack split into pieces (5 x 65 g vs 325 g) gives
- *     the size.
+ *   Size (ITEM_SIZE, ITEM_UOFM, PACK_SIZE): the LABEL, as agreed with
+ *     Brett (CM-2099), so a row lines up with a shelf sweep of the same
+ *     tag. "2x375 g" stays 375 g x 2 against a 750 g box, "325 g" stays
+ *     325 g x 1 against a pack of 5 x 65 g. The pack is used only when
+ *     - the label prints no size, or
+ *     - the label lists alternative sizes ("120/180 g"): the pack's size
+ *       when it is one of them, else the row is rejected, and blank when
+ *       the pack shows none.
+ *     Sold by weight ("Preis siehe Packung", "ca. 2,3 kg"): 1 kg, pack 1,
+ *     REG_PRICE = the label's price per kg. "18x2er Packung": 2 Ct x 18.
+ *   BRAND, DESCRIPTION: the PACKAGING when it shows them, the label
+ *     otherwise. A label covering several varieties ("verschiedene
+ *     Sorten") gives them instead.
  *   Prices, unit price, SKU, UPC: the LABEL only. UPC follows the spec -
  *     the label's own barcode or a produce PLU. A barcode read off the
  *     pack goes to RAW_DATA_JSON.package_barcode, never to UPC.
@@ -46,9 +53,13 @@
  *
  * clean
  *   Clean - read as expected
- *   Check - price / size does not reproduce the printed unit price, or the
- *           label and the pack print different sizes
- *   Error - neither a label nor any packaging could be read
+ *   Check  - price / size does not reproduce the printed unit price, or
+ *            the label and the pack print different sizes
+ *   Reject - the observation does not count (CM-2099): the label and the
+ *            pack are different products, a photo is unreadable, or the
+ *            pack's size is not one the label lists. The values are still
+ *            written for review; RAW_DATA_JSON.reject_reason says why
+ *   Error  - neither a label nor any packaging could be read
  * ===================================================================== */
 
 (async function () {
@@ -104,9 +115,13 @@
       UNIT_PRICE_AMBIGUOUS_FLAG: 'Check',
 
       // Label size vs pack size: past this gap they disagree and the row
-      // is flagged (the pack's size is still the one written).
+      // is flagged (the label's size is still the one written).
       SIZE_MISMATCH_TOLERANCE_PCT: 0.02,
       SIZE_MISMATCH_FLAG: 'Check',
+
+      // clean value for an observation that does not count (see the
+      // header). '' = never reject, only log.
+      REJECT_FLAG: 'Reject',
 
       // true hands a failed download or Gemini call back to Mozenda as a
       // failed item; false writes one row marked 'Error' instead.
@@ -368,8 +383,9 @@ STEP 1 - SORT THE IMAGES
 Decide for EVERY image what it shows, and write it in "images" as {"image": n, "kind": ...}:
 - "label" - a shelf price label for this product: a paper tag, an electronic shelf label, a produce sign. When there is a label it is IMAGE 1, shown clearly and in full. AT MOST ONE image is the label
 - "packaging" - the product itself, usually held in a hand or photographed close up: its front, back, side or bottom panels
-- "other" - neither: blurred, a different product, a shelf with no readable label
+- "other" - neither: a different product, a shelf with no label for this product
 Some products have no label image and some have no packaging image. That is normal: the missing section is null.
+Write "readable" for EVERY image: false when blur, glare, darkness, distance or the frame edge keeps you from reading the label's price and name (for a label) or the pack's brand and name (for packaging); true otherwise. A blurred label is still "label", with readable false - never call it "other".
 
 READ ONLY THE PRODUCT THE PHOTOS ARE ABOUT
 The photos are taken in a store, so OTHER labels and OTHER products are visible around the edges and in the background.
@@ -409,6 +425,7 @@ FIELDS, in the order you will write them:
    - ONE price -> "regularPrice"
    - An OLD price - struck through, or marked "statt", "UVP", "vorher", "was" - beside the current price, or a printed discount ("BILLIGER", "AKTION", "Angebot", "SALE", "-30${PCT}") -> the old price is "regularPrice" and the current price is "promoPrice"
    - A printed discount with no old price -> "promoPrice", regularPrice null
+   - NO PRICE, only a note that the pack carries it ("Preis siehe Packung", "Preis s. Etikett") -> every price field null, plus extras "price_on_pack" as printed and "variable_weight" = "true". Still read the unit price ("1 kg = 4.99")
    - NOT promotions: colour alone, "NEU", "NEW", "TIEFPREIS", "Dauerhaft günstig", "Preis-Hit" with no old price, a "BIO" badge
    - LOYALTY is a price the label GATES behind something the shopper must present: an app, a loyalty card, a coupon, a membership ("Lidl Plus", "REWE Bonus", "mit App", "Clubcard Price", "Member price") -> "loyaltyPrice". The price for everyone else is "regularPrice", or "promoPrice" if it is itself discounted. No printed condition means not loyalty
    - MULTI-BUY ("2 für 3.00", "ab 2 Stück je 0.99", "1+1 gratis") -> the price is the TOTAL for the quantity and the count goes in that lane's multiple: "2 für 3.00" -> "3.00" with multiple "2"; "ab 2 Stück je 0.99" -> "1.98" with multiple "2"; "1+1 gratis" on a 1.49 item -> "1.49" with multiple "2". A single-item price has multiple "1"
@@ -426,7 +443,7 @@ FIELDS, in the order you will write them:
    - A MULTIPACK of separate retail units ("6x0,33 l", "4 x 125 g") -> the COMPONENT is the size: "0.33" and "l", plus extras "pack_printed" = "6x0,33 l"
    - A PACK COUNT with no component size ("6er Pack", "6-Pack") -> extras "pack_printed" as printed. The count is never "itemSize"
    - SEVERAL ALTERNATIVE SIZES ("50/100 g Packung", "395/360 g") -> both null, plus extras "size_variants" = "50/100 g"
-   - AN EXAMPLE WEIGHT ("z.B. 500 g", "ca. 1 kg", "per kg") -> both null, plus extras "example_weight" as printed; loose goods sold by weight -> extras "variable_weight" = "true"
+   - AN EXAMPLE OR APPROXIMATE WEIGHT ("z.B. 500 g", "ca. 2,3 kg Packung", "per kg") -> both null, plus extras "example_weight" as printed and "variable_weight" = "true"; loose goods sold by weight -> extras "variable_weight" = "true"
    - Never take a size from the packaging
 
 6. "rawPriceStrings" - the PRICE tokens on the label, copied exactly as printed and untidied: ["1,49", "1.39", "1 kg = 10.69", "-7${PCT}"]. PRICES ONLY - no article number, PLU or barcode digits. A token you cannot fully read is left out
@@ -457,7 +474,7 @@ FIELDS, in the order you will write them:
 10. "organic" - true only when the label shows an organic logo or badge ("BIO", the EU leaf) or an organic control code ("DE-ÖKO-006")
 
 11. "extras" - anything else printed on the label, as {"key","value"}, values exactly as printed:
-    "variant", "package", "pack_printed", "size_variants", "example_weight", "variable_weight", "unit_price_text", "promo_badge", "promo_valid_text", "tag_code", "has_qr" as above, and "organic_code" (the control code as printed), "origin" (the origin line without its heading: "Ursprung: Italien" -> "Italien", "Herkunft: s. Etikett" -> "s. Etikett"), "grade" ("Klasse: I" -> "I"), "variety", "label_type" ("paper", "esl_eink", "produce_sign", "handwritten")
+    "variant", "package", "pack_printed", "size_variants", "example_weight", "variable_weight", "price_on_pack", "unit_price_text", "promo_badge", "promo_valid_text", "tag_code", "has_qr" as above, and "organic_code" (the control code as printed), "origin" (the origin line without its heading: "Ursprung: Italien" -> "Italien", "Herkunft: s. Etikett" -> "s. Etikett"), "grade" ("Klasse: I" -> "I"), "variety", "label_type" ("paper", "esl_eink", "produce_sign", "handwritten")
     DEPOSIT is never added to or subtracted from the price: "pfand" (the number alone), "pfand_text" (as printed), "pfand_included" ("true" for "inkl.", "false" for "zzgl.")
 
 EXAMPLE - an electronic label reading "FERDI FUCHS" / "Mini Würstchen/" / "Salami" / "verschiedene Sorten" / "50/100 g Packung", a QR code with "0125957" under it and "4 T" beside it, "1 kg = 33.80 / 16.90", big price 1.69:
@@ -522,10 +539,13 @@ NULL vs EMPTY ARRAY: null (scalar/object) and [] (array) both mean "not present 
 =============================================================
 OUTPUT
 =============================================================
-Return ONE JSON OBJECT with exactly three keys:
+Return ONE JSON OBJECT with exactly four keys:
   "images"    - one entry per image, from STEP 1
   "label"     - the object from SECTION A, or null when no image is the label
   "packaging" - the object from SECTION B, or null when no image is packaging
+  "match"     - written LAST, after both sections; null unless there is BOTH a label and packaging:
+      "sameProduct" - false ONLY when the label and the pack are clearly DIFFERENT products: a different product type ("Raumentfeuchter" on the label, a de-icer spray in the hand), a different brand, a different product line. A label for several varieties ("verschiedene Sorten", "Paprika/Curry", "120/180 g") matches any one of them. A size difference alone does NOT decide it. true when they are the same product, null when you cannot tell
+      "reason"      - when sameProduct is false, a few words in English ("label is a dehumidifier, pack is a de-icer spray"); null otherwise
 No markdown fences, no text outside the object. NEVER guess.`;
     }
 
@@ -539,9 +559,10 @@ No markdown fences, no text outside the object. NEVER guess.`;
         type: 'OBJECT',
         properties: {
           image: { type: 'INTEGER', nullable: true },
-          kind: { type: 'STRING', nullable: true }
+          kind: { type: 'STRING', nullable: true },
+          readable: { type: 'BOOLEAN', nullable: true }
         },
-        propertyOrdering: ['image', 'kind']
+        propertyOrdering: ['image', 'kind', 'readable']
       }
     };
 
@@ -700,10 +721,22 @@ No markdown fences, no text outside the object. NEVER guess.`;
       ]
     };
 
+    // Does the label belong to the pack in the photos? Asked after both
+    // sections are read, so the answer cannot steer either reading.
+    const MATCH_SCHEMA = {
+      type: 'OBJECT',
+      nullable: true,
+      properties: {
+        sameProduct: { type: 'BOOLEAN', nullable: true },
+        reason: { type: 'STRING', nullable: true }
+      },
+      propertyOrdering: ['sameProduct', 'reason']
+    };
+
     const RESPONSE_SCHEMA = {
       type: 'OBJECT',
-      properties: { images: IMAGES_SCHEMA, label: LABEL_SCHEMA, packaging: PACKAGING_SCHEMA },
-      propertyOrdering: ['images', 'label', 'packaging']
+      properties: { images: IMAGES_SCHEMA, label: LABEL_SCHEMA, packaging: PACKAGING_SCHEMA, match: MATCH_SCHEMA },
+      propertyOrdering: ['images', 'label', 'packaging', 'match']
     };
 
     // -----------------------------------------------------------------
@@ -800,7 +833,8 @@ No markdown fences, no text outside the object. NEVER guess.`;
 
       const label = parsed.label && typeof parsed.label === 'object' ? parsed.label : null;
       const packaging = parsed.packaging && typeof parsed.packaging === 'object' ? parsed.packaging : null;
-      return { images: Array.isArray(parsed.images) ? parsed.images : [], label, packaging, usage };
+      const match = parsed.match && typeof parsed.match === 'object' ? parsed.match : null;
+      return { images: Array.isArray(parsed.images) ? parsed.images : [], label, packaging, match, usage };
     }
 
     // -----------------------------------------------------------------
@@ -1111,6 +1145,63 @@ No markdown fences, no text outside the object. NEVER guess.`;
         text.match(/\bpack\s+of\s+(\d+)/i);
       const count = match ? Number(match[1]) : 1;
       return count > 1 ? count : 1;
+    }
+
+    // -----------------------------------------------------------------
+    // Size rules (CM-2099, agreed with Brett 2026-11)
+    //   - the shelf label is the source of the size
+    //   - sold by weight: 1 kg at the label's unit price
+    //   - "18x2er Packung": 2 Ct x 18
+    // -----------------------------------------------------------------
+
+    // The value of one extra ("pack_printed", "size_variants"), '' when absent.
+    function extraOf(label, key) {
+      const extras = Array.isArray(label && label.extras) ? label.extras : [];
+      const hit = extras.find(extra => extra && String(extra.key || '').trim().toLowerCase() === key && !isBlank(extra.value));
+      return hit ? String(hit.value).trim() : '';
+    }
+
+    // A unit-price basis ("1 kg", "kg", "100 g") as { size, uom }, or null.
+    function parseBasis(basis) {
+      const m = String(isBlank(basis) ? '' : basis).trim().match(/^(\d+(?:[.,]\d+)?)?\s*(.+)$/);
+      if (!m) return null;
+      const uom = normalizeUom(m[2]);
+      const size = m[1] ? parseQuantity(m[1], m[2]) : 1;
+      if (size === null || !(size > 0) || !UOM_FACTOR[uom]) return null;
+      return { size, uom };
+    }
+
+    // SOLD BY WEIGHT: the price depends on the weight of each pack ("Preis
+    // siehe Packung", "ca. 2,3 kg Packung", "z.B. 500 g für 3.29"). The
+    // row is 1 kg (1 l; 1 lb on a US tag) at the label's unit price,
+    // never the weight of the one pack photographed, which differs from
+    // pack to pack. Returns { size: 1, uom, price } or null.
+    function variableWeightOf(label) {
+      if (!label) return null;
+      const flagged = /^(true|yes|1)$/i.test(extraOf(label, 'variable_weight')) ||
+        !!extraOf(label, 'example_weight') || !!extraOf(label, 'price_on_pack');
+      if (!flagged) return null;
+      const info = readUnitPrice(label);
+      const unitPrice = info && info.effective !== undefined ? info.effective : parsePrice(label.unitPrice);
+      const basis = parseBasis(label.unitPriceBasis);
+      if (unitPrice === null || !basis) return null;
+      const family = UOM_FACTOR[basis.uom][0];
+      if (family !== 'mass' && family !== 'volume') return null;
+      const imperial = ['oz', 'lb', 'fl oz', 'pt', 'qt', 'gal'].indexOf(basis.uom) !== -1;
+      const uom = family === 'mass' ? (imperial ? 'lb' : 'kg') : (imperial ? basis.uom : 'l');
+      const price = unitPrice * UOM_FACTOR[uom][1] / (basis.size * UOM_FACTOR[basis.uom][1]);
+      return { size: 1, uom, price: Number(price.toFixed(2)) };
+    }
+
+    // A count-only multipack ("18x2er Packung": 18 packs of 2) as
+    // { size: 2, uom: 'Ct', count: 18 }, or null. Used only when the label
+    // prints no net quantity.
+    function countOnlyOf(label) {
+      const m = extraOf(label, 'pack_printed').match(/(\d+)\s*[x×*]\s*(\d+)\s*-?\s*er\b/i);
+      if (!m) return null;
+      const count = Number(m[1]);
+      const size = Number(m[2]);
+      return count >= 1 && size >= 1 ? { size, uom: 'Ct', count } : null;
     }
 
     // -----------------------------------------------------------------
@@ -1620,7 +1711,7 @@ No markdown fences, no text outside the object. NEVER guess.`;
 
     function hasPrice(label) {
       return !!label && (parsePrice(label.regularPrice) !== null || parsePrice(label.promoPrice) !== null ||
-        parsePrice(label.loyaltyPrice) !== null);
+        parsePrice(label.loyaltyPrice) !== null || variableWeightOf(label) !== null);
     }
 
     function baseRow(imagesInput, imageUrl, lastSeen, country, currency, usage, multiple, clean) {
@@ -1691,6 +1782,24 @@ No markdown fences, no text outside the object. NEVER guess.`;
       return kinds;
     }
 
+    // Which kinds of photo the model could not read: the label when its
+    // photo is unreadable, the packaging when EVERY packaging photo is (one
+    // sharp shot of the pack is enough).
+    function unreadableKinds(images, kinds) {
+      const readable = kinds.map(() => true);
+      (Array.isArray(images) ? images : []).forEach(entry => {
+        if (!entry || typeof entry !== 'object') return;
+        const index = Number(entry.image) - 1;
+        if (index >= 0 && index < kinds.length && entry.readable === false) readable[index] = false;
+      });
+      const packIndexes = kinds.map((kind, index) => kind === 'packaging' ? index : -1).filter(index => index !== -1);
+      const labelIndex = kinds.indexOf('label');
+      return {
+        label: labelIndex !== -1 && !readable[labelIndex],
+        packaging: packIndexes.length > 0 && packIndexes.every(index => !readable[index])
+      };
+    }
+
     // The pack's size, when it prints one the code can use.
     function packSizeOf(pkg) {
       if (!pkg) return null;
@@ -1719,18 +1828,60 @@ No markdown fences, no text outside the object. NEVER guess.`;
       return Math.abs(totalA - totalB) > Math.max(totalA, totalB) * CONFIG.SIZE_MISMATCH_TOLERANCE_PCT;
     }
 
-    // The model sometimes counts pieces sealed together as separate units
-    // ("5 Stück" in one bag -> 5 x 65 g), which the prompt forbids. When the
-    // label sells the same total as ONE item ("325 g Packung"), the label
-    // settles it: one item of 325 g. A label that prints the multipack
-    // itself ("2x375 g") has a count above 1 and is left alone.
-    function sealedPiecesAsOne(fromPack, fromLabel) {
-      if (!fromPack || !fromLabel || fromPack.count <= 1 || fromLabel.count !== 1) return fromPack;
-      const fp = UOM_FACTOR[fromPack.uom];
-      const fl = UOM_FACTOR[fromLabel.uom];
-      if (!fp || !fl || fp[0] !== fl[0] || sizesDisagree(fromPack, fromLabel)) return fromPack;
-      console.log(`Pack read as ${fromPack.count} x ${fromPack.size} ${fromPack.uom}, label sells ${fromLabel.size} ${fromLabel.uom} as one item - keeping 1 x ${fromLabel.size} ${fromLabel.uom}`);
-      return { size: fromLabel.size, uom: fromLabel.uom, count: 1, source: 'label' };
+    // The label's alternative sizes ("120/180 g", "50 g/100 g",
+    // "395/360/377-g-Packung") as [{ size, uom }]. A number with no unit of
+    // its own takes the last unit printed.
+    function sizeVariantsOf(label) {
+      const text = extraOf(label, 'size_variants');
+      if (!text) return [];
+      const units = (text.match(/\d\s*-?\s*[a-z]+/gi) || []).map(unit => unit.replace(/^[\d\s-]+/, ''));
+      const fallback = units.length ? units[units.length - 1] : '';
+      const out = [];
+      text.split('/').forEach(part => {
+        const m = part.match(/(\d+(?:[.,]\d+)?)\s*-?\s*([a-z]+)?/i);
+        if (!m) return;
+        const uom = normalizeUom(m[2] || fallback);
+        const size = parseQuantity(m[1], uom);
+        if (size !== null && UOM_FACTOR[uom]) out.push({ size, uom });
+      });
+      return out;
+    }
+
+    // One item of a and one item of b are the same quantity (counts
+    // ignored). Units that do not compare are never the same.
+    function sameQuantity(a, b) {
+      const fa = UOM_FACTOR[a.uom];
+      const fb = UOM_FACTOR[b.uom];
+      if (!fa || !fb || fa[0] !== fb[0]) return false;
+      const qa = a.size * fa[1];
+      const qb = b.size * fb[1];
+      return Math.abs(qa - qb) <= Math.max(qa, qb) * CONFIG.SIZE_MISMATCH_TOLERANCE_PCT;
+    }
+
+    // The size written for the row - the LABEL first (see the header).
+    // Returns { chosen, fromLabel, fromPack, byWeight, reject }: chosen is
+    // { size, uom, count, source } or null, reject a reason or ''.
+    function chooseSize(label, pkg) {
+      const fromPack = packSizeOf(pkg);
+      const byWeight = variableWeightOf(label);
+      if (byWeight) {
+        // The pack's own weight is one pack's, not the product's.
+        return { chosen: { size: byWeight.size, uom: byWeight.uom, count: 1, source: 'label' }, fromLabel: null, fromPack, byWeight, reject: '' };
+      }
+      const countOnly = countOnlyOf(label);
+      const fromLabel = labelSizeOf(label) || (countOnly ? Object.assign({ source: 'label' }, countOnly) : null);
+      if (fromLabel) return { chosen: fromLabel, fromLabel, fromPack, byWeight: null, reject: '' };
+
+      const variants = sizeVariantsOf(label);
+      if (variants.length > 0) {
+        if (!fromPack) return { chosen: null, fromLabel: null, fromPack, byWeight: null, reject: '' };
+        if (variants.some(variant => sameQuantity(variant, fromPack))) {
+          return { chosen: fromPack, fromLabel: null, fromPack, byWeight: null, reject: '' };
+        }
+        console.warn(`The pack's ${fromPack.size} ${fromPack.uom} is not one of the label's sizes (${extraOf(label, 'size_variants')})`);
+        return { chosen: null, fromLabel: null, fromPack, byWeight: null, reject: 'pack_size_not_on_label' };
+      }
+      return { chosen: fromPack, fromLabel: null, fromPack, byWeight: null, reject: '' };
     }
 
     // A label for several varieties at one price ("verschiedene Sorten",
@@ -1759,12 +1910,20 @@ No markdown fences, no text outside the object. NEVER guess.`;
       const row = baseRow(ctx.imagesInput, ctx.imageUrl, ctx.lastSeen, country,
         resolveCurrency(label.currency, country), usage, 'no', 'Clean');
 
-      // Prices: the label only.
-      const regular = parsePrice(label.regularPrice);
-      const promo = parsePrice(label.promoPrice);
-      const loyalty = parsePrice(label.loyaltyPrice);
+      // Size first: a label sold by weight also decides the price.
+      const sizing = chooseSize(label, pkg);
+      const byWeight = sizing.byWeight;
+      if (sizing.reject) ctx.rejects.push(sizing.reject);
+
+      // Prices: the label only. Sold by weight: the price per kg as
+      // REG_PRICE; a pack price on such a label is for one pack's weight,
+      // so it is not written (raw_price_strings still has it).
+      if (byWeight) console.log(`Sold by weight - 1 ${byWeight.uom} at ${byWeight.price}`);
+      const regular = byWeight ? byWeight.price : parsePrice(label.regularPrice);
+      const promo = byWeight ? null : parsePrice(label.promoPrice);
+      const loyalty = byWeight ? null : parsePrice(label.loyaltyPrice);
       row.REG_PRICE = formatPrice(regular);
-      row.REG_MULTIPLE = parseMultiple(label.regularMultiple, regular !== null);
+      row.REG_MULTIPLE = parseMultiple(byWeight ? '1' : label.regularMultiple, regular !== null);
       row.PROMO_PRICE = formatPrice(promo);
       row.PROMO_MULTIPLE = parseMultiple(label.promoMultiple, promo !== null);
       row.LOYALTY_PRICE = formatPrice(loyalty);
@@ -1784,19 +1943,17 @@ No markdown fences, no text outside the object. NEVER guess.`;
       row.BRAND = brand;
       row.DESCRIPTION = buildDescription(brand, name);
 
-      // Size: the pack first, the label otherwise.
-      const fromLabel = labelSizeOf(label);
-      const fromPack = sealedPiecesAsOne(packSizeOf(pkg), fromLabel);
-      const chosen = fromPack || fromLabel;
+      // Size: the label first (see chooseSize).
+      const chosen = sizing.chosen;
       if (chosen) {
         row.ITEM_SIZE = String(chosen.size);
         row.ITEM_UOFM = chosen.uom;
         row.ITEM_SIZE_UOFM = chosen.uom ? `${chosen.size} ${chosen.uom}` : String(chosen.size);
         row.PACK_SIZE = String(chosen.count);
       }
-      const sizeMismatch = sizesDisagree(fromPack, fromLabel);
+      const sizeMismatch = sizesDisagree(sizing.fromPack, sizing.fromLabel);
       if (sizeMismatch) {
-        console.warn(`The label says ${label.itemSize} ${label.itemUom}, the pack says ${pkg.packItemSize} ${pkg.packItemUom} - keeping the pack`);
+        console.warn(`The label says ${label.itemSize} ${label.itemUom}, the pack says ${pkg.packItemSize} ${pkg.packItemUom} - keeping the label`);
         if (CONFIG.SIZE_MISMATCH_FLAG) row.clean = CONFIG.SIZE_MISMATCH_FLAG;
       }
 
@@ -1920,15 +2077,37 @@ No markdown fences, no text outside the object. NEVER guess.`;
     const labelIndex = kinds.indexOf('label');
     const packIndex = kinds.indexOf('packaging');
     const imageUrl = links[labelIndex !== -1 ? labelIndex : (packIndex !== -1 ? packIndex : 0)];
-    const ctx = { imagesInput, imageUrl, lastSeen, pinnedCountry };
+    const rejects = [];
+    const ctx = { imagesInput, imageUrl, lastSeen, pinnedCountry, rejects };
 
     const row = buildRow(label || {}, pkg || {}, packaging, ctx, usage);
 
     const readLabel = !!label && (hasPrice(label) || !isBlank(label.name) || !isBlank(label.brand));
     const readPack = !!packaging || !!packSize;
+
+    // Rejects (CM-2099): the shelf label and the product photos must both
+    // be good, and of the same product, for the observation to count.
+    const unreadable = unreadableKinds(extraction.images, kinds);
+    if (hasLabelImage && (!readLabel || unreadable.label)) rejects.push('label_unreadable');
+    if (hasPackImage && unreadable.packaging) rejects.push('packaging_unreadable');
+    const match = extraction.match && typeof extraction.match === 'object' ? extraction.match : null;
+    if (label && pkg && match && match.sameProduct === false) {
+      console.warn(`The label and the pack are different products: ${match.reason || 'no reason given'}`);
+      rejects.push('label_and_product_differ');
+    }
+
     if (!readLabel && !readPack) {
       console.warn('Neither a label nor any packaging could be read');
       row.clean = 'Error';
+    } else if (rejects.length > 0 && CONFIG.REJECT_FLAG) {
+      const reasons = rejects.filter((reason, index) => rejects.indexOf(reason) === index);
+      console.warn(`Observation rejected: ${reasons.join(', ')}`);
+      row.clean = CONFIG.REJECT_FLAG;
+      const raw = row.RAW_DATA_JSON ? JSON.parse(row.RAW_DATA_JSON) : {};
+      raw.reject_reason = reasons.join(', ');
+      const detail = reasons.indexOf('label_and_product_differ') !== -1 ? cleanText(match.reason, CONFIG.RAW_MAX_VALUE_CHARS) : null;
+      if (detail) raw.reject_detail = detail;
+      row.RAW_DATA_JSON = JSON.stringify(raw);
     }
     console.log(`Label: ${readLabel ? 'read' : 'none'} | packaging: ${readPack ? 'read' : 'none'} | photos: ${kinds.join(', ')}`);
 
