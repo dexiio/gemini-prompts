@@ -779,12 +779,13 @@ This time do NOT return the ingredient declaration or the product claims - they 
       return out;
     }
 
-    // RAW_DATA_JSON.recitation_blocked: the ingredients and claims are
-    // missing because Gemini refused to copy them, not because the pack
-    // has none.
-    function markRecitation(row) {
+    // The row came from the shorter retry, so its ingredients and claims
+    // are missing because of Gemini, not because the pack has none:
+    // RAW_DATA_JSON.recitation_blocked (Gemini refused to copy them) or
+    // RAW_DATA_JSON.output_truncated (the first answer ran out of tokens).
+    function markLeanRetry(row, reason) {
       const raw = row.RAW_DATA_JSON ? JSON.parse(row.RAW_DATA_JSON) : {};
-      raw.recitation_blocked = true;
+      raw[reason === 'recitation' ? 'recitation_blocked' : 'output_truncated'] = true;
       row.RAW_DATA_JSON = JSON.stringify(raw);
     }
 
@@ -869,7 +870,8 @@ This time do NOT return the ingredient declaration or the product claims - they 
       }
       if (candidate.finishReason === 'RECITATION') {
         const error = new Error('Gemini stopped the answer: RECITATION (it matched text the model was trained on)');
-        error.recitation = true;
+        error.retryLean = true;
+        error.leanReason = 'recitation';
         error.usage = usage;
         throw error;
       }
@@ -883,7 +885,14 @@ This time do NOT return the ingredient declaration or the product claims - they 
 
       const parsed = parseModelJson(text);
       if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        throw new Error(`Could not parse JSON from model response: ${text.slice(0, 300)}`);
+        // Say why: a cut-off answer ("MAX_TOKENS" - usually a list the model
+        // kept repeating) gets the shorter retry, like RECITATION.
+        const reason = candidate.finishReason || 'none';
+        const error = new Error(`Could not parse JSON from model response (finishReason ${reason}, ${text.length} chars, ${usage.thoughtsTokens} thinking tokens): ${text.slice(0, 200)}${text.length > 400 ? ' ... ' + text.slice(-200) : ''}`);
+        error.retryLean = reason === 'MAX_TOKENS';
+        error.leanReason = 'max_tokens';
+        error.usage = usage;
+        throw error;
       }
 
       const label = parsed.label && typeof parsed.label === 'object' ? parsed.label : null;
@@ -2147,11 +2156,11 @@ This time do NOT return the ingredient declaration or the product claims - they 
       try {
         extraction = await extractProductInfo(fetched, apiKeyValue);
       } catch (error) {
-        if (!error.recitation) throw error;
-        console.warn(`${error.message} - retrying without the ingredient text and claims`);
+        if (!error.retryLean) throw error;
+        console.warn(`${error.message} - retrying without the long pack text`);
         extraction = await extractProductInfo(fetched, apiKeyValue, true);
         extraction.usage = addUsage(error.usage, extraction.usage);
-        extraction.recitation = true;
+        extraction.leanReason = error.leanReason;
       }
     } catch (error) {
       console.error(`Extraction error: ${error.message}`);
@@ -2228,7 +2237,7 @@ This time do NOT return the ingredient declaration or the product claims - they 
     }
     console.log(`Label: ${readLabel ? 'read' : 'none'} | packaging: ${readPack ? 'read' : 'none'} | photos: ${kinds.join(', ')}`);
 
-    if (extraction.recitation) markRecitation(row);
+    if (extraction.leanReason) markLeanRetry(row, extraction.leanReason);
     M_SetFieldValues(row);
     M_StopWaiting();
 
