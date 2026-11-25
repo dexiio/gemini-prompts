@@ -405,6 +405,7 @@ ALDI SÜD Germany. A printed paper card or an electronic (e-ink) screen in the s
 FIELDS, in the order you will write them:
 
 1. "tagLocation" - where this label is, as above. Write it FIRST, before reading anything on the label
+   "box2d" - right after it, the outline of THIS label in the image as [ymin, xmin, ymax, xmax], each a whole number from 0 to 1000 relative to the image height and width. It marks the region you are about to read - everything you write for this label comes from inside it. null only if you cannot outline it
 
 2. "brand" - the small capitals line above the name ("MOSER ROTH", "MILSANI", "GUT BIO"), exactly as printed. null if there is none
    "name" - the bold line under it ("Trüffelpralinen"), exactly as printed. Never put the brand in it
@@ -481,13 +482,13 @@ BEFORE YOU ANSWER
 THREE EXAMPLES.
 
 A regular label, article number read:
-{"tagLocation":"shelf 1 from top, label 2 from left","brand":"MOSER ROTH","name":"Trüffelpralinen","brandDisplay":"Moser Roth","nameDisplay":"Trüffelpralinen","regularPrice":"3.99","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"19.95","unitPriceBasis":"kg","unitPriceText":"19.95/kg","itemSize":"200","itemUom":"g","rawPriceStrings":["3.99","19.95/kg"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":"637739|4|F1","productIdCheck":"637739","productId":"637739","upc":null,"organic":false,"extras":[{"key":"label_type","value":"paper"}]}
+{"tagLocation":"shelf 1 from top, label 2 from left","box2d":[118,402,331,598],"brand":"MOSER ROTH","name":"Trüffelpralinen","brandDisplay":"Moser Roth","nameDisplay":"Trüffelpralinen","regularPrice":"3.99","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"19.95","unitPriceBasis":"kg","unitPriceText":"19.95/kg","itemSize":"200","itemUom":"g","rawPriceStrings":["3.99","19.95/kg"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"high"},"productIdPrinted":"637739|4|F1","productIdCheck":"637739","productId":"637739","upc":null,"organic":false,"extras":[{"key":"label_type","value":"paper"}]}
 
 The same label in poorer light - the fifth digit could be a 3 or an 8, so it is "?" and the article number is not captured. The row is still worth returning:
-{"tagLocation":"shelf 1 from top, label 2 from left","brand":"MOSER ROTH","name":"Trüffelpralinen","brandDisplay":"Moser Roth","nameDisplay":"Trüffelpralinen","regularPrice":"3.99","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"19.95","unitPriceBasis":"kg","unitPriceText":"19.95/kg","itemSize":"200","itemUom":"g","rawPriceStrings":["3.99","19.95/kg"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"low"},"productIdPrinted":"6377?9|4|F1","productIdCheck":"6377?9","productId":null,"upc":null,"organic":false,"extras":[{"key":"label_type","value":"paper"}]}
+{"tagLocation":"shelf 1 from top, label 2 from left","box2d":[118,402,331,598],"brand":"MOSER ROTH","name":"Trüffelpralinen","brandDisplay":"Moser Roth","nameDisplay":"Trüffelpralinen","regularPrice":"3.99","regularMultiple":"1","promoPrice":null,"promoMultiple":null,"loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"19.95","unitPriceBasis":"kg","unitPriceText":"19.95/kg","itemSize":"200","itemUom":"g","rawPriceStrings":["3.99","19.95/kg"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"low"},"productIdPrinted":"6377?9|4|F1","productIdCheck":"6377?9","productId":null,"upc":null,"organic":false,"extras":[{"key":"label_type","value":"paper"}]}
 
 A red electronic promotion label - big price 2.49, small struck-through 2.99 to its right, badge "NUR FÜR KURZE ZEIT":
-{"tagLocation":"shelf 3 from top, label 1 from left","brand":"CUCINA","name":"Pesto Genovese","brandDisplay":"Cucina","nameDisplay":"Pesto Genovese","regularPrice":"2.99","regularMultiple":"1","promoPrice":"2.49","promoMultiple":"1","loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"13.11","unitPriceBasis":"kg","unitPriceText":"13.11/kg","itemSize":"190","itemUom":"g","rawPriceStrings":["2.49","2.99","13.11/kg"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"medium"},"productIdPrinted":null,"productIdCheck":null,"productId":null,"upc":null,"organic":false,"extras":[{"key":"label_type","value":"esl_eink"},{"key":"promo_badge","value":"NUR FÜR KURZE ZEIT"}]}`;
+{"tagLocation":"shelf 3 from top, label 1 from left","box2d":[700,40,900,300],"brand":"CUCINA","name":"Pesto Genovese","brandDisplay":"Cucina","nameDisplay":"Pesto Genovese","regularPrice":"2.99","regularMultiple":"1","promoPrice":"2.49","promoMultiple":"1","loyaltyPrice":null,"loyaltyMultiple":null,"unitPrice":"13.11","unitPriceBasis":"kg","unitPriceText":"13.11/kg","itemSize":"190","itemUom":"g","rawPriceStrings":["2.49","2.99","13.11/kg"],"confidence":{"description":"high","price":"high","size":"high","identifiers":"medium"},"productIdPrinted":null,"productIdCheck":null,"productId":null,"upc":null,"organic":false,"extras":[{"key":"label_type","value":"esl_eink"},{"key":"promo_badge","value":"NUR FÜR KURZE ZEIT"}]}`;
     }
 
     // -----------------------------------------------------------------
@@ -530,6 +531,7 @@ WHAT IS ACTUALLY READABLE ON A SHELF PHOTO - this is what you will usually be fi
 An ingredient list or nutrition table is the EXCEPTION on this kind of photo. When one genuinely is readable - a pack turned side-on, a close-up - read it in full under the rules above.
 
 FIELDS:
+- "box2d" - the outline of THIS package in the image as [ymin, xmin, ymax, xmax], each a whole number from 0 to 1000 relative to the image height and width. null if you cannot outline it
 - "nameOnPack" / "brandOnPack" - the name and brand AS PRINTED ON THE PACKAGE, verbatim. null if not legible. These exist so SECTION C's bind can be checked - they are NOT copies of the tag
 - "netContent" - the net quantity printed on the pack, as printed ("400 g", "3 x 90 ml", "0,5 l"). Never from the tag
 - "barcode" - the number printed under the barcode ON THIS PACK, all 8, 12 or 13 digits, copied exactly as printed, left to right. If ANY digit will not resolve, null - never a "?", never a guessed or dropped digit. The barcode is usually on the back or the bottom, so null is the normal answer on a shelf photo. Never from the tag, never from memory
@@ -644,6 +646,8 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
           // model to one physical tag before it reads a single character,
           // and gives the code a dedup key that is not the product name.
           tagLocation: { type: 'STRING', nullable: true },
+          // Where the tag is in the photo - kept in RAW_DATA_JSON.box_2d.
+          box2d: { type: 'ARRAY', nullable: true, items: { type: 'INTEGER' } },
           // No country / currency: Germany only, filled from the pin.
           brand: { type: 'STRING', nullable: true },
           name: { type: 'STRING', nullable: true },
@@ -708,7 +712,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
         // to it. The old order put productId first and confidence last, so
         // the grade could only rationalise a number already committed.
         propertyOrdering: [
-          'tagLocation',
+          'tagLocation', 'box2d',
           'brand', 'name', 'brandDisplay', 'nameDisplay',
           'regularPrice', 'regularMultiple', 'promoPrice', 'promoMultiple',
           'loyaltyPrice', 'loyaltyMultiple',
@@ -726,6 +730,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
       items: {
         type: 'OBJECT',
         properties: {
+          box2d: { type: 'ARRAY', nullable: true, items: { type: 'INTEGER' } },
           tagIndex: { type: 'INTEGER', nullable: true },
           bindConfidence: { type: 'STRING', nullable: true },
           bindBasis: { type: 'STRING', nullable: true },
@@ -812,7 +817,7 @@ Return ONE JSON OBJECT with the single key "tags", in the order you located the 
           languageCode: { type: 'STRING', nullable: true }
         },
         propertyOrdering: [
-          'tagIndex', 'bindConfidence', 'bindBasis',
+          'box2d', 'tagIndex', 'bindConfidence', 'bindBasis',
           'nameOnPack', 'brandOnPack', 'netContent', 'barcode',
           'originOnPack', 'organicCodeOnPack',
           'ingredients', 'nutritionFacts', 'productClaims',
@@ -1396,6 +1401,18 @@ This time do NOT return the ingredient declaration or the product claims - they 
       return out.map(part => part.trim().replace(/\.$/, '').trim()).filter(part => part);
     }
 
+    // A region of the photo as Gemini returns it: [ymin, xmin, ymax, xmax],
+    // each 0-1000 relative to the image height and width (multiply by the
+    // image size for pixels). Approximate - good enough to point a reviewer
+    // at the right tag, not pixel-precise. Anything malformed -> null.
+    function normalizeBox(value) {
+      if (!Array.isArray(value) || value.length !== 4) return null;
+      const box = value.map(Number);
+      if (!box.every(n => isFinite(n) && n >= 0 && n <= 1000)) return null;
+      const [ymin, xmin, ymax, xmax] = box.map(Math.round);
+      return ymin < ymax && xmin < xmax ? [ymin, xmin, ymax, xmax] : null;
+    }
+
     function cleanText(value, maxChars) {
       if (isBlank(value)) return null;
       const s = String(value).replace(/\s+/g, ' ').trim();
@@ -1503,6 +1520,8 @@ This time do NOT return the ingredient declaration or the product claims - they 
       if (name) out.name_on_pack = name;
       if (brand) out.brand_on_pack = brand;
       if (net) out.net_content = net;
+      const box = normalizeBox(pkg.box2d);
+      if (box) out.box_2d = box;
       const barcode = normalizePackageBarcode(pkg.barcode);
       if (barcode) out.package_barcode = barcode;
       // Origin and organic code as printed on the pack. buildRawJson lifts
@@ -1603,7 +1622,7 @@ This time do NOT return the ingredient declaration or the product claims - they 
 
       // languageCode alone is not panel evidence - it names the language
       // of text that did not survive normalization.
-      const keys = Object.keys(out).filter(k => k !== 'language_code');
+      const keys = Object.keys(out).filter(k => k !== 'language_code' && k !== 'box_2d');
       return keys.length ? out : null;
     }
 
@@ -2001,6 +2020,8 @@ This time do NOT return the ingredient declaration or the product claims - they 
       // the tag in the photo, and what the duplicate check keys on.
       const location = cleanText(label.tagLocation, CONFIG.RAW_MAX_VALUE_CHARS);
       if (location) raw.tag_location = location;
+      const box = normalizeBox(label.box2d);
+      if (box) raw.box_2d = box;
       if (upcType) raw.upc_type = upcType;
       // The printed produce-code text, kept whenever it did not become the
       // UPC (a PLU printed in the article-number slot, say).
