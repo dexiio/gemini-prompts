@@ -512,7 +512,6 @@ FIELDS:
 - "originOnPack" - the country-of-origin statement printed on the pack, verbatim, WITHOUT its heading: "Herkunft: Spanien" -> "Spanien", "Ursprungsland: Peru" -> "Peru", "Made in Germany" -> "Germany". ONLY an explicit origin statement - a manufacturer or distributor address is NOT an origin, and neither is "EU-Landwirtschaft / Nicht-EU-Landwirtschaft". null if not printed or not legible
 - "organicCodeOnPack" - the organic control code printed on the pack, as printed ("DE-ÖKO-006"). null if not printed or not legible
 - "ingredients.rawText" - the exact declaration after the heading ("Zutaten", "Ingredients", "Ingrédients"), line wraps joined with one space and wrap-hyphens removed. Same words, order, punctuation, script and capitalisation. Do NOT translate or re-order. Do NOT include the "Contains:" sentence
-- "ingredients.parsedList" - the same declaration as an array, one entry per top-level ingredient, in printed order, each verbatim INCLUDING its percentage and parenthesised sub-ingredients. A comma INSIDE parentheses does not start a new entry. [] when rawText is null
 - "ingredients.isPartial" - a real BOOLEAN. true when the list is cut off, curves out of view, blurs mid-list or is hidden. false when read heading to end. null when there is no ingredient text
 - "ingredients.activeIngredients" - ONLY from an "Active ingredients"/"Wirkstoffe" table: "name", "strength" ("3.0${PCT}", "500 mg") and "purpose" as separate printed columns. [] for food and cosmetics, which is nearly always
 - "ingredients.allergensContains" - allergens declared present, from a "Contains:"/"Enthält" sentence OR items in BOLD, UPPERCASE or underlined inside the list. As printed, never inferred. [] if none
@@ -653,7 +652,6 @@ No markdown fences, no text outside the object. NEVER guess.`;
           nullable: true,
           properties: {
             rawText: { type: 'STRING', nullable: true },
-            parsedList: { type: 'ARRAY', items: { type: 'STRING' } },
             isPartial: { type: 'BOOLEAN', nullable: true },
             activeIngredients: {
               type: 'ARRAY',
@@ -671,7 +669,7 @@ No markdown fences, no text outside the object. NEVER guess.`;
             allergensMayContain: { type: 'ARRAY', items: { type: 'STRING' } }
           },
           propertyOrdering: [
-            'rawText', 'parsedList', 'isPartial', 'activeIngredients',
+            'rawText', 'isPartial', 'activeIngredients',
             'allergensContains', 'allergensMayContain'
           ]
         },
@@ -739,6 +737,53 @@ No markdown fences, no text outside the object. NEVER guess.`;
       propertyOrdering: ['images', 'label', 'packaging', 'match']
     };
 
+    // Gemini stops an answer with finishReason RECITATION when its output
+    // matches text it was trained on - in practice a well-known product's
+    // ingredient list copied word for word. The retry asks for everything
+    // except that text, so the row still gets its price, size and ids.
+    const LEAN_LEFT_OUT = ['ingredients', 'productClaims'];
+    function leanSchema(schema) {
+      const copy = JSON.parse(JSON.stringify(schema));
+      (function strip(node) {
+        if (!node || typeof node !== 'object') return;
+        if (node.properties) {
+          LEAN_LEFT_OUT.forEach(key => {
+            if (!node.properties[key]) return;
+            delete node.properties[key];
+            if (Array.isArray(node.propertyOrdering)) node.propertyOrdering = node.propertyOrdering.filter(name => name !== key);
+          });
+          Object.keys(node.properties).forEach(key => strip(node.properties[key]));
+        }
+        if (node.items) strip(node.items);
+      })(copy);
+      return copy;
+    }
+    const LEAN_RESPONSE_SCHEMA = leanSchema(RESPONSE_SCHEMA);
+    const LEAN_NOTE = `
+
+=============================================================
+RETRY - LEAVE OUT THE LONG PACK TEXT
+=============================================================
+This time do NOT return the ingredient declaration or the product claims - they are not in the output. Every other field exactly as above.`;
+
+    // Token counts of two calls added together, so a retried item reports
+    // what it really cost.
+    function addUsage(a, b) {
+      const out = {};
+      Object.keys(Object.assign({}, a, b)).forEach(key => { out[key] = (Number(a && a[key]) || 0) + (Number(b && b[key]) || 0); });
+      if (out.cost !== undefined) out.cost = parseFloat(out.cost.toFixed(6));
+      return out;
+    }
+
+    // RAW_DATA_JSON.recitation_blocked: the ingredients and claims are
+    // missing because Gemini refused to copy them, not because the pack
+    // has none.
+    function markRecitation(row) {
+      const raw = row.RAW_DATA_JSON ? JSON.parse(row.RAW_DATA_JSON) : {};
+      raw.recitation_blocked = true;
+      row.RAW_DATA_JSON = JSON.stringify(raw);
+    }
+
     // -----------------------------------------------------------------
     // Gemini call
     // -----------------------------------------------------------------
@@ -777,8 +822,8 @@ No markdown fences, no text outside the object. NEVER guess.`;
     // All photos of the product in ONE call, each announced as "IMAGE n"
     // so the model can name it in "images". Returns the raw label and
     // packaging objects (either may be null) and the usage.
-    async function extractProductInfo(images, apiKey) {
-      const parts = [{ text: buildPrompt(images.length) }];
+    async function extractProductInfo(images, apiKey, lean) {
+      const parts = [{ text: buildPrompt(images.length) + (lean ? LEAN_NOTE : '') }];
       images.forEach((image, index) => {
         parts.push({ text: `IMAGE ${index + 1}:` });
         parts.push(image);
@@ -793,7 +838,7 @@ No markdown fences, no text outside the object. NEVER guess.`;
           topP: 0.95,
           maxOutputTokens: CONFIG.MAX_OUTPUT_TOKENS,
           responseMimeType: 'application/json',
-          responseSchema: RESPONSE_SCHEMA
+          responseSchema: lean ? LEAN_RESPONSE_SCHEMA : RESPONSE_SCHEMA
         }
       };
       if (CONFIG.MEDIA_RESOLUTION) payload.generationConfig.mediaResolution = CONFIG.MEDIA_RESOLUTION;
@@ -817,6 +862,12 @@ No markdown fences, no text outside the object. NEVER guess.`;
       if (!candidate) {
         const blockReason = result.promptFeedback && result.promptFeedback.blockReason;
         throw new Error(blockReason ? `Gemini returned no candidates (blocked: ${blockReason})` : 'Gemini returned no candidates');
+      }
+      if (candidate.finishReason === 'RECITATION') {
+        const error = new Error('Gemini stopped the answer: RECITATION (it matched text the model was trained on)');
+        error.recitation = true;
+        error.usage = usage;
+        throw error;
       }
       if (candidate.finishReason && candidate.finishReason !== 'STOP') {
         console.warn(`Gemini finishReason: ${candidate.finishReason}`);
@@ -1208,6 +1259,31 @@ No markdown fences, no text outside the object. NEVER guess.`;
     // Packaging: normalization
     // -----------------------------------------------------------------
 
+    // The ingredient declaration split into its top-level ingredients, in
+    // printed order: at a comma or semicolon outside brackets, never inside
+    // a decimal ("12,5 %"). Done here, not by the model, so the declaration
+    // is copied only once - long copied text is what trips Gemini's
+    // RECITATION stop.
+    function splitIngredients(text) {
+      if (isBlank(text)) return [];
+      const s = String(text);
+      const out = [];
+      let depth = 0;
+      let start = 0;
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (ch === '(' || ch === '[') depth++;
+        else if ((ch === ')' || ch === ']') && depth > 0) depth--;
+        else if ((ch === ',' || ch === ';') && depth === 0 &&
+          !(ch === ',' && /\d/.test(s[i - 1] || '') && /\d/.test(s[i + 1] || ''))) {
+          out.push(s.slice(start, i));
+          start = i + 1;
+        }
+      }
+      out.push(s.slice(start));
+      return out.map(part => part.trim().replace(/\.$/, '').trim()).filter(part => part);
+    }
+
     function cleanText(value, maxChars) {
       if (isBlank(value)) return null;
       const s = String(value).replace(/\s+/g, ' ').trim();
@@ -1253,7 +1329,7 @@ No markdown fences, no text outside the object. NEVER guess.`;
       const rawText = cleanText(src.rawText, CONFIG.PACKAGING_MAX_INGREDIENT_CHARS);
       if (rawText) ingredients.raw_text = rawText;
 
-      const parsed = cleanTextList(src.parsedList, CONFIG.PACKAGING_MAX_PARSED_ITEMS, CONFIG.PACKAGING_MAX_LIST_ITEM_CHARS);
+      const parsed = cleanTextList(splitIngredients(rawText), CONFIG.PACKAGING_MAX_PARSED_ITEMS, CONFIG.PACKAGING_MAX_LIST_ITEM_CHARS);
       if (parsed.length) ingredients.parsed_list = parsed;
       // isPartial only means something next to an actual declaration.
       if (rawText && typeof src.isPartial === 'boolean') ingredients.is_partial = src.isPartial;
@@ -2035,7 +2111,15 @@ No markdown fences, no text outside the object. NEVER guess.`;
       if (failed.length > 0) {
         throw new Error(`Failed to fetch ${failed.length} of ${links.length} images: ${failed.join(' | ')}`);
       }
-      extraction = await extractProductInfo(fetched, apiKeyValue);
+      try {
+        extraction = await extractProductInfo(fetched, apiKeyValue);
+      } catch (error) {
+        if (!error.recitation) throw error;
+        console.warn(`${error.message} - retrying without the ingredient text and claims`);
+        extraction = await extractProductInfo(fetched, apiKeyValue, true);
+        extraction.usage = addUsage(error.usage, extraction.usage);
+        extraction.recitation = true;
+      }
     } catch (error) {
       console.error(`Extraction error: ${error.message}`);
       if (CONFIG.STOP_ON_EXTRACTION_ERROR) {
@@ -2111,6 +2195,7 @@ No markdown fences, no text outside the object. NEVER guess.`;
     }
     console.log(`Label: ${readLabel ? 'read' : 'none'} | packaging: ${readPack ? 'read' : 'none'} | photos: ${kinds.join(', ')}`);
 
+    if (extraction.recitation) markRecitation(row);
     M_SetFieldValues(row);
     M_StopWaiting();
 
